@@ -148,14 +148,45 @@ scrcpy --audio-source=mic
 
 ---
 
-## 7. Device Control & Physical Screen
+## 7. Battery Preservation, Screen-Off Mode & Thermal Management
+
+Using a smartphone for long mirroring sessions while plugged into a PC can generate heat and cause battery wear over time. Scrcpy provides built-in mechanisms to eliminate screen wear, minimize power consumption, and protect battery health.
+
+### 7.1. Recommended Command for Battery Protection
+```cmd
+scrcpy -S -w --temperature --auto-reconnect
+```
+
+- **`-S` (`--turn-screen-off`)**: Powers OFF the physical OLED/LCD display on the phone immediately when mirroring begins. The phone remains fully controllable on your PC window while its physical screen stays completely black.
+- **`-w` (`--stay-awake`)**: Keeps the Android OS active while plugged in so it won't go to sleep or lock up, allowing seamless PC interaction without touching the physical phone.
+- **`--temperature`**: Monitors device temperature in real-time in the title bar (e.g. `[34.2°C]`).
+- **`--auto-reconnect`**: Automatically reconnects if the cable is jiggled or temporarily disconnected.
+
+### 7.2. Toggling the Physical Screen at Runtime
+You do not need to restart scrcpy to toggle the phone's physical screen:
+- **Turn phone screen OFF**: <kbd>Alt</kbd> + <kbd>o</kbd>
+- **Turn phone screen ON**: <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>o</kbd>
+- **Toggle temperature display**: <kbd>Alt</kbd> + <kbd>t</kbd>
+
+### 7.3. Further Optimizations to Reduce Heat & Battery Wear
+1. **Reduce CPU/GPU rendering load**:
+   Cap resolution and frame rate to decrease video encoder workload on the device:
+   ```cmd
+   scrcpy -S -w -m 1280 --max-fps=60 -b 4M --temperature
+   ```
+2. **Auto-lock device upon closing scrcpy**:
+   Add `--power-off-on-close` so that when you close the scrcpy window on your PC, the phone locks itself and enters sleep mode automatically.
+3. **USB Power Tips**:
+   If your phone gets warm while connected, connect it to a standard USB 2.0 port (500mA) or disable fast USB charging in Android settings while mirroring to prevent high-current charging heat.
 
 | Option | Shortcut | Description |
 |---|---|---|
-| `-S, --turn-screen-off` | <kbd>Alt</kbd>+<kbd>o</kbd> | Turn the physical phone screen off while keeping mirroring active on PC (saves battery and reduces heat). |
+| `-S, --turn-screen-off` | <kbd>Alt</kbd>+<kbd>o</kbd> | Turn physical phone screen off while keeping PC mirroring active (saves battery and limits heat). |
 | `-w, --stay-awake` | - | Prevent phone from sleeping while plugged in. |
+| `--temperature` / `--show-temperature` | <kbd>Alt</kbd>+<kbd>t</kbd> | Display real-time device temperature in window title bar. |
+| `--print-temperature` | - | Print real-time device temperature measurements to console. |
+| `--power-off-on-close` | - | Automatically put phone to sleep when scrcpy is closed. |
 | `--show-touches` | - | Show visual touch indicators on device. |
-| `--power-off-on-close` | - | Automatically turn off device screen when closing scrcpy window. |
 | `--no-control` | - | Read-only mirror: disable all mouse, keyboard, and touch input forwarding. |
 
 *Recommended command for daily PC usage:*
@@ -260,6 +291,14 @@ The default modifier key (<kbd>MOD</kbd>) on Windows is **(Left) <kbd>Alt</kbd>*
 ## 12. Ready-to-use Windows Batch Scripts (.bat)
 
 Create `.bat` files in your scrcpy folder to launch your preferred profiles with a single double-click.
+
+### 🔋 0. Battery Saver & Screen-Off Profile (`battery_saver.bat`)
+Powers off physical phone screen, stays awake, monitors temperature, and auto-locks on close:
+```bat
+@echo off
+scrcpy -S -w -m 1280 --max-fps=60 -b 4M --temperature --power-off-on-close --auto-reconnect
+pause
+```
 
 ### 🎮 1. Gaming Profile (`gaming.bat`)
 Optimized for 60 FPS, low latency, phone screen turned off to prevent overheating:
