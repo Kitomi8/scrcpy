@@ -73,6 +73,7 @@ scrcpy --no-audio --record=file.mkv
 
 Documentation for command line arguments is available:
  - `scrcpy --help`
+ - [Windows Complete User Manual](windows_manual.md) (with options, shortcuts, batch scripts, and new features)
  - on [github](/README.md)
 
 If you plan to always use the same arguments, create a file `myscrcpy.bat`
