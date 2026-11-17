@@ -126,4 +126,11 @@ sc_adb_get_device_ip(struct sc_intr *intr, const char *serial, unsigned flags);
 uint16_t
 sc_adb_get_device_sdk_version(struct sc_intr *intr, const char *serial);
 
+/**
+ * Return the device temperature in tenths of a degree Celsius (e.g. 352 for 35.2°C),
+ * or INT32_MIN on error.
+ */
+int32_t
+sc_adb_get_temperature(struct sc_intr *intr, const char *serial);
+
 #endif

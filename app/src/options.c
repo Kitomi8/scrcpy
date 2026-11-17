@@ -125,6 +125,7 @@ const struct scrcpy_options scrcpy_options_default = {
     .ignore_video_encoder_constraints = false,
     .update_terminal_title = true,
     .auto_reconnect = false,
+    .print_temperature = false,
 };
 
 enum sc_orientation

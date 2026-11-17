@@ -847,6 +847,8 @@ aoa_complete:
             .hwdec_mode = options->hwdec_mode,
             .fullscreen = options->fullscreen,
             .start_fps_counter = options->start_fps_counter,
+            .start_temp_monitor = options->print_temperature,
+            .serial = serial,
         };
 
         if (!sc_screen_init(&s->screen, &screen_params)) {

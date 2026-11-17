@@ -374,6 +374,7 @@ struct scrcpy_options {
     bool ignore_video_encoder_constraints;
     bool update_terminal_title;
     bool auto_reconnect;
+    bool print_temperature;
 };
 
 extern const struct scrcpy_options scrcpy_options_default;

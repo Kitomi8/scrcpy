@@ -27,4 +27,13 @@ sc_adb_parse_devices(char *str, struct sc_vec_adb_devices *out_vec);
 char *
 sc_adb_parse_device_ip(char *str);
 
+/**
+ * Parse the temperature in tenths of degree Celsius from the output of
+ * `dumpsys battery` or sysfs temp.
+ *
+ * The parameter must be a NUL-terminated string.
+ */
+bool
+sc_adb_parse_temperature(const char *str, int32_t *out_tenth_c);
+
 #endif

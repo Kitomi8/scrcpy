@@ -260,3 +260,37 @@ sc_adb_parse_device_ip(char *str) {
 
     return NULL;
 }
+
+bool
+sc_adb_parse_temperature(const char *str, int32_t *out_tenth_c) {
+    if (!str) {
+        return false;
+    }
+
+    const char *p = strstr(str, "temperature:");
+    if (p) {
+        p += 12;
+    } else {
+        p = str;
+    }
+
+    while (*p == ' ' || *p == '\t') {
+        ++p;
+    }
+
+    char *endptr;
+    long val = strtol(p, &endptr, 10);
+    if (endptr == p || val <= 0) {
+        return false;
+    }
+
+    if (val > 1000) {
+        *out_tenth_c = (int32_t) (val / 100);
+    } else if (val > 100) {
+        *out_tenth_c = (int32_t) val;
+    } else {
+        *out_tenth_c = (int32_t) (val * 10);
+    }
+
+    return true;
+}

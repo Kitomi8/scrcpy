@@ -19,6 +19,7 @@ src = [
     'src/events.c',
     'src/file_pusher.c',
     'src/fps_counter.c',
+    'src/temp_monitor.c',
     'src/frame_buffer.c',
     'src/hwdec.c',
     'src/icon.c',

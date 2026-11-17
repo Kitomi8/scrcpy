@@ -292,10 +292,49 @@ static void test_get_ip_truncated(void) {
     assert(!ip);
 }
 
+static void test_parse_temperature(void) {
+    const char dumpsys_battery[] =
+        "Current Battery Service state:\n"
+        "  AC powered: false\n"
+        "  USB powered: true\n"
+        "  level: 85\n"
+        "  voltage: 4123\n"
+        "  temperature: 312\n"
+        "  technology: Li-poly\n";
+
+    int32_t temp = 0;
+    bool ok = sc_adb_parse_temperature(dumpsys_battery, &temp);
+    assert(ok);
+    assert(temp == 312); // 31.2°C
+
+    // Millidegrees format
+    ok = sc_adb_parse_temperature("temperature: 36500\n", &temp);
+    assert(ok);
+    assert(temp == 365); // 36.5°C
+
+    // Raw degrees format
+    ok = sc_adb_parse_temperature("temperature: 34\n", &temp);
+    assert(ok);
+    assert(temp == 340); // 34.0°C
+
+    // Direct number format
+    ok = sc_adb_parse_temperature("42000", &temp);
+    assert(ok);
+    assert(temp == 420); // 42.0°C
+
+    // Invalid format
+    ok = sc_adb_parse_temperature("no temp here", &temp);
+    assert(!ok);
+
+    ok = sc_adb_parse_temperature(NULL, &temp);
+    assert(!ok);
+}
+
 int main(int argc, char *argv[]) {
     (void) argc;
     (void) argv;
 
+    test_parse_temperature();
     test_adb_devices();
     test_adb_devices_cr();
     test_adb_devices_daemon_start();

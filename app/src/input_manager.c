@@ -242,6 +242,17 @@ switch_fps_counter_state(struct sc_input_manager *im) {
 }
 
 static void
+switch_temp_monitor_state(struct sc_input_manager *im) {
+    struct sc_temp_monitor *temp_monitor = &im->screen->temp_monitor;
+
+    if (sc_temp_monitor_is_started(temp_monitor)) {
+        sc_temp_monitor_stop(temp_monitor);
+    } else {
+        sc_temp_monitor_start(temp_monitor);
+    }
+}
+
+static void
 clipboard_paste(struct sc_input_manager *im) {
     assert(im->controller && im->kp && !im->camera);
 
@@ -463,7 +474,7 @@ sc_input_manager_process_key(struct sc_input_manager *im,
                 }
             }
             return;
-        case SDLK_F12:.
+        case SDLK_F12:
             if (down && !repeat && !disconnected && im->controller) {
                 if (!im->camera) {
                     sc_input_manager_req_set_display_power(im, true);
@@ -570,6 +581,11 @@ sc_input_manager_process_key(struct sc_input_manager *im,
             case SDLK_I:
                 if (video && !shift && !repeat && down) {
                     switch_fps_counter_state(im);
+                }
+                return;
+            case SDLK_T:
+                if (video && !shift && !repeat && down) {
+                    switch_temp_monitor_state(im);
                 }
                 return;
             case SDLK_Q:

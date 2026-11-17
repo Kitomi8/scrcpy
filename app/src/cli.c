@@ -113,6 +113,7 @@ enum {
     OPT_NO_TERMINAL_TITLE,
     OPT_HWDEC,
     OPT_AUTO_RECONNECT,
+    OPT_PRINT_TEMPERATURE,
 };
 
 struct sc_option {
@@ -789,6 +790,22 @@ static const struct sc_option options[] = {
         .longopt = "print-fps",
         .text = "Start FPS counter, to print framerate logs to the console. "
                 "It can be started or stopped at any time with MOD+i.",
+    },
+    {
+        .longopt_id = OPT_PRINT_TEMPERATURE,
+        .longopt = "print-temperature",
+        .text = "Start temperature monitor, to display phone temperature in "
+                "the window title bar and console. It can be toggled with MOD+t.",
+    },
+    {
+        .longopt_id = OPT_PRINT_TEMPERATURE,
+        .longopt = "temperature",
+        .text = "Alias for --print-temperature.",
+    },
+    {
+        .longopt_id = OPT_PRINT_TEMPERATURE,
+        .longopt = "show-temperature",
+        .text = "Alias for --print-temperature.",
     },
     {
         .longopt_id = OPT_PUSH_TARGET,
@@ -2823,6 +2840,9 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
                 break;
             case OPT_PRINT_FPS:
                 opts->start_fps_counter = true;
+                break;
+            case OPT_PRINT_TEMPERATURE:
+                opts->print_temperature = true;
                 break;
             case OPT_VIDEO_CODEC:
                 if (!parse_video_codec(optarg, &opts->video_codec)) {

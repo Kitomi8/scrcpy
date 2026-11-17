@@ -521,6 +521,34 @@ sc_screen_fps_callback(uint32_t fps, void *userdata) {
     sc_push_event_with_data(SC_EVENT_SCREEN_FPS, (void *) (uintptr_t) fps);
 }
 
+static void
+sc_screen_temp_callback(int32_t temp, void *userdata) {
+    (void) userdata;
+    sc_push_event_with_data(SC_EVENT_SCREEN_TEMPERATURE, (void *) (intptr_t) temp);
+}
+
+static void
+sc_screen_update_title(struct sc_screen *screen) {
+    if (!screen->window || !screen->window_title) {
+        return;
+    }
+
+    char title[512];
+    int len = snprintf(title, sizeof(title), "%s", screen->window_title);
+
+    if (screen->current_fps != UINT32_MAX && len < (int) sizeof(title)) {
+        len += snprintf(title + len, sizeof(title) - len, " [%" PRIu32 " FPS]",
+                        screen->current_fps);
+    }
+
+    if (screen->current_temp != INT32_MIN && len < (int) sizeof(title)) {
+        len += snprintf(title + len, sizeof(title) - len, " [%.1f°C]",
+                        screen->current_temp / 10.0f);
+    }
+
+    SDL_SetWindowTitle(screen->window, title);
+}
+
 bool
 sc_screen_init(struct sc_screen *screen,
                const struct sc_screen_params *params) {
@@ -550,6 +578,10 @@ sc_screen_init(struct sc_screen *screen,
     screen->req.height = params->window_height;
     screen->req.fullscreen = params->fullscreen;
     screen->req.start_fps_counter = params->start_fps_counter;
+    screen->req.start_temp_monitor = params->start_temp_monitor;
+
+    screen->current_fps = UINT32_MAX;
+    screen->current_temp = INT32_MIN;
 
     screen->prevent_auto_resize = false;
 
@@ -569,6 +601,10 @@ sc_screen_init(struct sc_screen *screen,
 
     if (!sc_fps_counter_init(&screen->fps_counter)) {
         goto error_destroy_frame_buffer;
+    }
+
+    if (!sc_temp_monitor_init(&screen->temp_monitor, params->serial)) {
+        goto error_destroy_fps_counter;
     }
 
     if (screen->video) {
@@ -617,7 +653,7 @@ sc_screen_init(struct sc_screen *screen,
         sc_sdl_create_window(title, x, y, width, height, window_flags);
     if (!screen->window) {
         LOGE("Could not create window: %s", SDL_GetError());
-        goto error_destroy_fps_counter;
+        goto error_destroy_temp_monitor;
     }
 
     screen->window_title = strdup(title);
@@ -628,6 +664,8 @@ sc_screen_init(struct sc_screen *screen,
 
     sc_fps_counter_set_callback(&screen->fps_counter,
                                 sc_screen_fps_callback, screen);
+    sc_temp_monitor_set_callback(&screen->temp_monitor,
+                                 sc_screen_temp_callback, screen);
 
     screen->renderer = SDL_CreateRenderer(screen->window, NULL);
     if (!screen->renderer) {
@@ -776,6 +814,8 @@ error_destroy_renderer:
 error_destroy_window:
     SDL_DestroyWindow(screen->window);
     free(screen->window_title);
+error_destroy_temp_monitor:
+    sc_temp_monitor_destroy(&screen->temp_monitor);
 error_destroy_fps_counter:
     sc_fps_counter_destroy(&screen->fps_counter);
 error_destroy_frame_buffer:
@@ -822,6 +862,10 @@ sc_screen_show_initial_window(struct sc_screen *screen) {
         sc_fps_counter_start(&screen->fps_counter);
     }
 
+    if (screen->req.start_temp_monitor) {
+        sc_temp_monitor_start(&screen->temp_monitor);
+    }
+
     screen->window_shown = true;
     sc_sdl_show_window(screen->window);
     sc_screen_update_content_rect(screen);
@@ -836,6 +880,7 @@ sc_screen_hide_window(struct sc_screen *screen) {
 void
 sc_screen_interrupt(struct sc_screen *screen) {
     sc_fps_counter_interrupt(&screen->fps_counter);
+    sc_temp_monitor_interrupt(&screen->temp_monitor);
 }
 
 static void
@@ -848,6 +893,7 @@ sc_screen_interrupt_disconnect(struct sc_screen *screen) {
 void
 sc_screen_join(struct sc_screen *screen) {
     sc_fps_counter_join(&screen->fps_counter);
+    sc_temp_monitor_join(&screen->temp_monitor);
     if (screen->disconnect_started) {
         sc_disconnect_join(&screen->disconnect);
     }
@@ -870,6 +916,7 @@ sc_screen_destroy(struct sc_screen *screen) {
     SDL_DestroyWindow(screen->window);
     free(screen->window_title);
     screen->window_title = NULL;
+    sc_temp_monitor_destroy(&screen->temp_monitor);
     sc_fps_counter_destroy(&screen->fps_counter);
     sc_frame_buffer_destroy(&screen->fb);
     sc_mutex_destroy(&screen->mutex);
@@ -877,6 +924,9 @@ sc_screen_destroy(struct sc_screen *screen) {
     SDL_Event event;
     while (sc_dequeue_event(SC_EVENT_SCREEN_FPS, &event)) {
         // Drain any pending FPS events
+    }
+    while (sc_dequeue_event(SC_EVENT_SCREEN_TEMPERATURE, &event)) {
+        // Drain any pending temperature events
     }
     bool has_event =
         sc_dequeue_event(SC_EVENT_DISCONNECTED_ICON_LOADED, &event);
@@ -1248,16 +1298,14 @@ sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event) {
             return;
         case SC_EVENT_SCREEN_FPS: {
             uintptr_t fps = (uintptr_t) event->user.data1;
-            if (screen->window && screen->window_title) {
-                if (fps == UINT32_MAX) {
-                    SDL_SetWindowTitle(screen->window, screen->window_title);
-                } else {
-                    char title[512];
-                    snprintf(title, sizeof(title), "%s [%" PRIu32 " FPS]",
-                             screen->window_title, (uint32_t) fps);
-                    SDL_SetWindowTitle(screen->window, title);
-                }
-            }
+            screen->current_fps = (fps == UINT32_MAX) ? UINT32_MAX : (uint32_t) fps;
+            sc_screen_update_title(screen);
+            return;
+        }
+        case SC_EVENT_SCREEN_TEMPERATURE: {
+            intptr_t temp = (intptr_t) event->user.data1;
+            screen->current_temp = (temp == INTPTR_MIN) ? INT32_MIN : (int32_t) temp;
+            sc_screen_update_title(screen);
             return;
         }
         case SC_EVENT_DEVICE_DISCONNECTED:

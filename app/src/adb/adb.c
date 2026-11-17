@@ -759,3 +759,34 @@ sc_adb_get_device_sdk_version(struct sc_intr *intr, const char *serial) {
 
     return value;
 }
+
+int32_t
+sc_adb_get_temperature(struct sc_intr *intr, const char *serial) {
+    assert(serial);
+    const char *const argv[] =
+        SC_ADB_COMMAND("-s", serial, "shell", "dumpsys", "battery");
+
+    sc_pipe pout;
+    sc_pid pid = sc_adb_execute_p(argv, SC_ADB_SILENT, &pout);
+    if (pid == SC_PROCESS_NONE) {
+        return INT32_MIN;
+    }
+
+    char buf[1024];
+    ssize_t r = sc_pipe_read_all_intr(intr, pid, pout, buf, sizeof(buf) - 1);
+    sc_pipe_close(pout);
+
+    bool ok = process_check_success_intr(intr, pid, "dumpsys battery", SC_ADB_SILENT);
+    if (!ok || r <= 0) {
+        return INT32_MIN;
+    }
+
+    buf[r] = '\0';
+
+    int32_t temp = INT32_MIN;
+    if (sc_adb_parse_temperature(buf, &temp)) {
+        return temp;
+    }
+
+    return INT32_MIN;
+}
