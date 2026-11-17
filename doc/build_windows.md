@@ -1,16 +1,16 @@
-# Guide de compilation pour Windows 64-bit (Win64)
+# Build scrcpy for Windows 64-bit (Win64)
 
-Ce guide décrit en détail les étapes pour compiler `scrcpy.exe` en 64-bit pour Windows, soit par cross-compilation depuis Linux (méthode officielle et la plus rapide), soit nativement sous Windows avec MSYS2.
+This guide provides step-by-step instructions to compile `scrcpy.exe` for Windows 64-bit, either by cross-compiling from Linux (the recommended official method) or natively on Windows using MSYS2.
 
 ---
 
-## 1. Méthode 1 : Cross-compilation depuis Linux (recommandée)
+## 1. Method 1: Cross-compile from Linux (recommended)
 
-Cette méthode permet de générer un exécutable Windows 64-bit ainsi qu'un package portable autonome complet directement depuis une machine Linux (Debian / Ubuntu / dérivés).
+This method produces a 64-bit Windows executable and a complete self-contained portable package directly from a Linux machine (Debian, Ubuntu, or derivatives).
 
-### 1.1. Dépendances système requises
+### 1.1. System Requirements
 
-Installez les outils de compilation croisée MinGW-w64, NASM, Meson, Ninja et les utilitaires nécessaires :
+Install MinGW-w64 cross-compilers, NASM, Meson, Ninja, and the required build utilities:
 
 ```bash
 sudo apt update
@@ -31,9 +31,9 @@ sudo apt install -y \
     libtool
 ```
 
-### 1.2. Wrapper pkg-config pour MinGW
+### 1.2. MinGW pkg-config wrapper
 
-Assurez-vous que le wrapper `x86_64-w64-mingw32-pkg-config` est présent et accessible dans votre variable d'environnement `PATH` (par exemple dans `~/.local/bin`) :
+Ensure a `x86_64-w64-mingw32-pkg-config` wrapper script is available in your `PATH` (for instance in `~/.local/bin`):
 
 ```bash
 mkdir -p ~/.local/bin
@@ -44,49 +44,49 @@ EOF
 chmod +x ~/.local/bin/x86_64-w64-mingw32-pkg-config
 ```
 
-### 1.3. Lancement de la compilation
+### 1.3. Build
 
-À la racine du dépôt scrcpy, exécutez le script de release pour Windows 64-bit :
+From the root directory of the scrcpy repository, run the Windows 64-bit release build script:
 
 ```bash
-# Compiler toutes les dépendances (SDL3, FFmpeg, dav1d, LibUSB, ADB) et scrcpy.exe
+# Build all dependencies (SDL3, FFmpeg, dav1d, LibUSB, ADB) and scrcpy.exe
 ./release/build_windows.sh 64
 ```
 
-Ce script effectue automatiquement les opérations suivantes :
-1. Télécharge et extrait ADB pour Windows (`app/deps/adb_windows.sh`).
-2. Compile la bibliothèque multimédia SDL3 en DLL 64-bit (`app/deps/sdl.sh win64 cross shared`).
-3. Compile la bibliothèque de décodage AV1 dav1d en bibliothèque statique (`app/deps/dav1d.sh win64 cross shared`).
-4. Compile FFmpeg (libavcodec, libavformat, libavutil, libswresample avec support D3D11VA) en DLLs 64-bit (`app/deps/ffmpeg.sh win64 cross shared`).
-5. Compile LibUSB en DLL 64-bit pour le mode USB OTG / HID (`app/deps/libusb.sh win64 cross shared`).
-6. Configure le projet scrcpy avec Meson en utilisant `cross_win64.txt` et `-Dportable=true`.
-7. Compile `scrcpy.exe` via Ninja et rassemble tous les binaires et DLLs dans `release/work/build-win64/dist/`.
+This script automatically performs the following steps:
+1. Downloads and extracts ADB for Windows (`app/deps/adb_windows.sh`).
+2. Builds the SDL3 multimedia library as a 64-bit DLL (`app/deps/sdl.sh win64 cross shared`).
+3. Builds the dav1d AV1 decoder as a static library (`app/deps/dav1d.sh win64 cross shared`).
+4. Builds FFmpeg (libavcodec, libavformat, libavutil, libswresample with D3D11VA hardware acceleration) as 64-bit DLLs (`app/deps/ffmpeg.sh win64 cross shared`).
+5. Builds LibUSB as a 64-bit DLL for USB OTG and HID simulation (`app/deps/libusb.sh win64 cross shared`).
+6. Configures Meson using `cross_win64.txt` with portable release settings (`-Dportable=true`).
+7. Compiles `scrcpy.exe` using Ninja and gathers all binaries and DLLs into `release/work/build-win64/dist/`.
 
-### 1.4. Génération de l'archive ZIP autonome
+### 1.4. Package into a portable ZIP archive
 
-Pour regrouper `scrcpy.exe`, `scrcpy-server` et toutes les DLLs dans une archive ZIP distribuable :
+To bundle `scrcpy.exe`, `scrcpy-server`, and all required DLLs into a standalone ZIP archive:
 
 ```bash
-# Placer le binaire scrcpy-server (si non compilé localement)
+# Provide the scrcpy-server binary (if not compiled locally)
 mkdir -p release/work/build-server/server
-# Copier ou télécharger scrcpy-server v5.0.1 :
+# Download matching scrcpy-server v5.0.1:
 curl -L -o release/work/build-server/server/scrcpy-server https://github.com/Genymobile/scrcpy/releases/download/v5.0.1/scrcpy-server-v5.0.1
 
-# Créer le package ZIP autonome
+# Generate the standalone ZIP package
 ./release/package_client.sh win64 zip
 ```
 
-L'archive ZIP sera générée dans `release/output/scrcpy-win64-<version>.zip`.
+The ZIP archive will be created in `release/output/scrcpy-win64-<version>.zip`.
 
 ---
 
-## 2. Méthode 2 : Compilation native sous Windows avec MSYS2
+## 2. Method 2: Native build on Windows with MSYS2
 
-Si vous préférez compiler directement sous Windows, vous pouvez utiliser l'environnement **MSYS2**.
+If you prefer building directly on Windows, you can use the **MSYS2** environment.
 
-### 2.1. Installation des outils dans MSYS2
+### 2.1. Install tools in MSYS2
 
-Ouvrez un terminal **MSYS2 MINGW64** et installez les paquets requis :
+Open an **MSYS2 MINGW64** terminal and install the required packages:
 
 ```bash
 pacman -Syu
@@ -104,66 +104,66 @@ pacman -S --needed \
     curl
 ```
 
-### 2.2. Configuration et compilation
+### 2.2. Configure and compile
 
-Toujours dans le terminal **MSYS2 MINGW64** :
+In the **MSYS2 MINGW64** terminal:
 
 ```bash
-# Récupérer scrcpy-server précompilé
+# Download prebuilt scrcpy-server
 curl -L -o scrcpy-server https://github.com/Genymobile/scrcpy/releases/download/v5.0.1/scrcpy-server-v5.0.1
 
-# Configurer Meson en mode portable
+# Configure Meson in portable mode without building the server
 meson setup build-win --buildtype=release --strip -Db_lto=true \
     -Dcompile_server=false \
     -Dportable=true
 
-# Compiler
+# Compile
 ninja -C build-win
 ```
 
-### 2.3. Déploiement
+### 2.3. Deployment
 
-Pour exécuter scrcpy en dehors du terminal MSYS2 :
-1. Créez un dossier de destination.
-2. Copiez `build-win/app/scrcpy.exe` et `scrcpy-server` dans ce dossier.
-3. Copiez les DLLs depuis `/mingw64/bin/` :
+To run scrcpy outside the MSYS2 terminal:
+1. Create a destination folder.
+2. Copy `build-win/app/scrcpy.exe` and `scrcpy-server` into that folder.
+3. Copy the required DLLs from `/mingw64/bin/`:
    - `SDL3.dll`
    - `avcodec-*.dll`, `avformat-*.dll`, `avutil-*.dll`, `swresample-*.dll`
    - `libusb-1.0.dll`
-   - Les DLLs d'exécution MinGW (`libwinpthread-1.dll`, `libgcc_s_seh-1.dll`, etc.)
-4. Téléchargez les *platform-tools* Google pour obtenir `adb.exe`, `AdbWinApi.dll` et `AdbWinUsbApi.dll` et placez-les dans le même dossier.
+   - MinGW runtime DLLs (`libwinpthread-1.dll`, `libgcc_s_seh-1.dll`, etc.)
+4. Download the Google Android *platform-tools* to extract `adb.exe`, `AdbWinApi.dll`, and `AdbWinUsbApi.dll` into the same folder.
 
 ---
 
-## 3. Contenu du package de distribution (Win64)
+## 3. Distribution package contents (Win64)
 
-Un déploiement fonctionnel de scrcpy pour Windows doit comporter :
+A complete standalone portable distribution contains:
 
-| Fichier | Description |
+| File | Description |
 |---|---|
-| `scrcpy.exe` | Client scrcpy pour Windows 64-bit |
-| `scrcpy-server` | Binaire serveur Java/Android exécuté sur l'appareil |
-| `SDL3.dll` | Affichage vidéo et gestion des événements clavier / souris |
-| `avcodec-63.dll` | Décodeur vidéo/audio FFmpeg |
-| `avformat-63.dll` | Démultiplexeur de flux FFmpeg |
-| `avutil-61.dll` | Utilitaires FFmpeg |
-| `swresample-7.dll` | Rééchantillonnage audio FFmpeg |
-| `libusb-1.0.dll` | Communication USB native (mode OTG) |
-| `adb.exe` | Outil de commande Android Debug Bridge |
-| `AdbWinApi.dll` | Bibliothèque Windows pour ADB |
-| `AdbWinUsbApi.dll` | Pilote WinUSB pour ADB |
-| `scrcpy-noconsole.vbs` | Lanceur discret sans invite de commande noire |
-| `open_a_terminal_here.bat` | Raccourci pour ouvrir un terminal de commande dans le dossier |
+| `scrcpy.exe` | 64-bit Windows scrcpy client |
+| `scrcpy-server` | Java/Android server binary executed on the device |
+| `SDL3.dll` | Video rendering and keyboard/mouse event handling |
+| `avcodec-63.dll` | FFmpeg video and audio decoder |
+| `avformat-63.dll` | FFmpeg stream demuxer |
+| `avutil-61.dll` | FFmpeg core utilities |
+| `swresample-7.dll` | FFmpeg audio resampling |
+| `libusb-1.0.dll` | Native USB communication (OTG mode) |
+| `adb.exe` | Android Debug Bridge executable |
+| `AdbWinApi.dll` | ADB Windows library |
+| `AdbWinUsbApi.dll` | ADB WinUSB driver interface |
+| `scrcpy-noconsole.vbs` | Quiet launcher without opening a command prompt window |
+| `open_a_terminal_here.bat` | Shortcut to open a terminal prompt in the folder |
 
 ---
 
-## 4. Utilisation sous Windows
+## 4. Usage on Windows
 
-1. Branchez votre téléphone Android avec le débogage USB activé.
-2. Lancez `scrcpy.exe`.
-3. **Fonctionnalités et raccourcis :**
-   - <kbd>Échap</kbd> ou <kbd>Alt</kbd>+<kbd>Échap</kbd> : Touche Retour Android.
-   - <kbd>Alt</kbd>+<kbd>t</kbd> : Afficher/masquer le moniteur de température du téléphone en temps réel dans la barre de titre.
-   - `--temperature` / `--show-temperature` : Activer le moniteur de température au démarrage.
-   - `--print-temperature` : Afficher la température mesurée dans la console.
-   - `--auto-reconnect` : Reconnexion automatique en cas de déconnexion.
+1. Connect your Android phone with **USB debugging** enabled.
+2. Launch `scrcpy.exe`.
+3. **Features and Shortcuts:**
+   - <kbd>Esc</kbd> or <kbd>Alt</kbd>+<kbd>Esc</kbd>: Android BACK key.
+   - <kbd>Alt</kbd>+<kbd>t</kbd>: Toggle real-time phone temperature in the window title bar.
+   - `--temperature` / `--show-temperature`: Enable the phone temperature monitor on startup.
+   - `--print-temperature`: Print device temperature measurements to console.
+   - `--auto-reconnect`: Automatically reconnect on connection loss.
