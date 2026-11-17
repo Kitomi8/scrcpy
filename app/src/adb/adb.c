@@ -61,6 +61,7 @@ sc_adb_init(void) {
 void
 sc_adb_destroy(void) {
     free(adb_executable);
+    adb_executable = NULL;
 }
 
 const char *

@@ -632,7 +632,7 @@ sc_screen_init(struct sc_screen *screen,
     screen->renderer = SDL_CreateRenderer(screen->window, NULL);
     if (!screen->renderer) {
         LOGE("Could not create renderer: %s", SDL_GetError());
-        goto error_free_window_title;
+        goto error_destroy_window;
     }
 
 #ifdef SC_DISPLAY_FORCE_OPENGL_CORE_PROFILE
@@ -775,7 +775,6 @@ error_destroy_renderer:
     SDL_DestroyRenderer(screen->renderer);
 error_destroy_window:
     SDL_DestroyWindow(screen->window);
-error_free_window_title:
     free(screen->window_title);
 error_destroy_fps_counter:
     sc_fps_counter_destroy(&screen->fps_counter);
@@ -870,11 +869,15 @@ sc_screen_destroy(struct sc_screen *screen) {
     SDL_DestroyRenderer(screen->renderer);
     SDL_DestroyWindow(screen->window);
     free(screen->window_title);
+    screen->window_title = NULL;
     sc_fps_counter_destroy(&screen->fps_counter);
     sc_frame_buffer_destroy(&screen->fb);
     sc_mutex_destroy(&screen->mutex);
 
     SDL_Event event;
+    while (sc_dequeue_event(SC_EVENT_SCREEN_FPS, &event)) {
+        // Drain any pending FPS events
+    }
     bool has_event =
         sc_dequeue_event(SC_EVENT_DISCONNECTED_ICON_LOADED, &event);
     if (has_event) {

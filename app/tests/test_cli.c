@@ -67,6 +67,7 @@ static void test_options(void) {
         "--window-width", "600",
         "--window-height", "0",
         "--window-borderless",
+        "--auto-reconnect",
     };
 
     bool ok = scrcpy_parse_args(&args, ARRAY_LEN(argv), argv);
@@ -74,6 +75,7 @@ static void test_options(void) {
 
     const struct scrcpy_options *opts = &args.opts;
     assert(opts->always_on_top);
+    assert(opts->auto_reconnect);
     assert(opts->video_bit_rate == 5000000);
     assert(!strcmp(opts->crop, "100:200:300:400"));
     assert(opts->fullscreen);

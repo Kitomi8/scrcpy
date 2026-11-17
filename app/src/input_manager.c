@@ -463,8 +463,8 @@ sc_input_manager_process_key(struct sc_input_manager *im,
                 }
             }
             return;
-        case SDLK_F12:
-            if (down && !repeat && im->controller) {
+        case SDLK_F12:.
+            if (down && !repeat && !disconnected && im->controller) {
                 if (!im->camera) {
                     sc_input_manager_req_set_display_power(im, true);
                 }
@@ -493,6 +493,15 @@ sc_input_manager_process_key(struct sc_input_manager *im,
                 };
                 if (!sc_controller_push_msg(im->controller, &msg_up)) {
                     LOGW("Could not request 'inject AKEYCODE_WAKEUP (UP)'");
+                }
+            }
+            return;
+        case SDLK_ESCAPE:
+        case SDLK_AC_BACK:
+            if (!disconnected && control && !im->camera && im->kp && !paused && !repeat) {
+                if (!ctrl) {
+                    enum sc_action action = down ? SC_ACTION_DOWN : SC_ACTION_UP;
+                    action_back(im, action);
                 }
             }
             return;
@@ -599,6 +608,8 @@ sc_input_manager_process_key(struct sc_input_manager *im,
                     return;
                 case SDLK_B: // fall-through
                 case SDLK_BACKSPACE:
+                case SDLK_ESCAPE:
+                case SDLK_AC_BACK:
                     if (im->kp && !shift && !repeat && !paused) {
                         action_back(im, action);
                     }

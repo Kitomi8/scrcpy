@@ -388,7 +388,13 @@ scrcpy(struct scrcpy_options *options) {
         return SCRCPY_EXIT_FAILURE;
     }
 
-    atexit(SDL_Quit);
+    static bool atexit_registered = false;
+    if (!atexit_registered) {
+        atexit(SDL_Quit);
+        atexit_registered = true;
+    }
+
+    SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_LAST);
 
     enum scrcpy_exit_code ret = SCRCPY_EXIT_FAILURE;
 
