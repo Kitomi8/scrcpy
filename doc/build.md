@@ -112,6 +112,8 @@ Then generate the releases:
 
 It will generate win32 and win64 releases into `dist/`.
 
+For a dedicated step-by-step guide on compiling for Windows 64-bit and bundling dependencies, see [build_windows.md](build_windows.md).
+
 
 #### In MSYS2
 
