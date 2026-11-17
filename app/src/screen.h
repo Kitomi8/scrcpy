@@ -69,6 +69,7 @@ struct sc_screen {
     } req;
 
     SDL_Window *window;
+    char *window_title;
     SDL_Renderer *renderer;
 #ifdef SC_DISPLAY_FORCE_OPENGL_CORE_PROFILE
     SDL_GLContext gl_context;

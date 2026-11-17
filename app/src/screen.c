@@ -1,6 +1,7 @@
 #include "screen.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <string.h>
 #include <SDL3/SDL.h>
 
@@ -514,6 +515,12 @@ sc_screen_frame_sink_push_session(struct sc_frame_sink *sink,
     return SC_SINK_OK;
 }
 
+static void
+sc_screen_fps_callback(uint32_t fps, void *userdata) {
+    (void) userdata;
+    sc_push_event_with_data(SC_EVENT_SCREEN_FPS, (void *) (uintptr_t) fps);
+}
+
 bool
 sc_screen_init(struct sc_screen *screen,
                const struct sc_screen_params *params) {
@@ -613,10 +620,19 @@ sc_screen_init(struct sc_screen *screen,
         goto error_destroy_fps_counter;
     }
 
+    screen->window_title = strdup(title);
+    if (!screen->window_title) {
+        LOG_OOM();
+        goto error_destroy_window;
+    }
+
+    sc_fps_counter_set_callback(&screen->fps_counter,
+                                sc_screen_fps_callback, screen);
+
     screen->renderer = SDL_CreateRenderer(screen->window, NULL);
     if (!screen->renderer) {
         LOGE("Could not create renderer: %s", SDL_GetError());
-        goto error_destroy_window;
+        goto error_free_window_title;
     }
 
 #ifdef SC_DISPLAY_FORCE_OPENGL_CORE_PROFILE
@@ -759,6 +775,8 @@ error_destroy_renderer:
     SDL_DestroyRenderer(screen->renderer);
 error_destroy_window:
     SDL_DestroyWindow(screen->window);
+error_free_window_title:
+    free(screen->window_title);
 error_destroy_fps_counter:
     sc_fps_counter_destroy(&screen->fps_counter);
 error_destroy_frame_buffer:
@@ -851,6 +869,7 @@ sc_screen_destroy(struct sc_screen *screen) {
 #endif
     SDL_DestroyRenderer(screen->renderer);
     SDL_DestroyWindow(screen->window);
+    free(screen->window_title);
     sc_fps_counter_destroy(&screen->fps_counter);
     sc_frame_buffer_destroy(&screen->fb);
     sc_mutex_destroy(&screen->mutex);
@@ -1224,6 +1243,20 @@ sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                 sc_screen_render(screen, true);
             }
             return;
+        case SC_EVENT_SCREEN_FPS: {
+            uintptr_t fps = (uintptr_t) event->user.data1;
+            if (screen->window && screen->window_title) {
+                if (fps == UINT32_MAX) {
+                    SDL_SetWindowTitle(screen->window, screen->window_title);
+                } else {
+                    char title[512];
+                    snprintf(title, sizeof(title), "%s [%" PRIu32 " FPS]",
+                             screen->window_title, (uint32_t) fps);
+                    SDL_SetWindowTitle(screen->window, title);
+                }
+            }
+            return;
+        }
         case SC_EVENT_DEVICE_DISCONNECTED:
             assert(!screen->disconnected);
             screen->disconnected = true;

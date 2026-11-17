@@ -94,11 +94,17 @@ main_scrcpy(int argc, char *argv[]) {
         goto net_cleanup;
     }
 
+    do {
 #ifdef HAVE_USB
-    ret = args.opts.otg ? scrcpy_otg(&args.opts) : scrcpy(&args.opts);
+        ret = args.opts.otg ? scrcpy_otg(&args.opts) : scrcpy(&args.opts);
 #else
-    ret = scrcpy(&args.opts);
+        ret = scrcpy(&args.opts);
 #endif
+        if (ret == SCRCPY_EXIT_DISCONNECTED && args.opts.auto_reconnect) {
+            LOGI("Device disconnected. Reconnecting in 2 seconds...");
+            SDL_Delay(2000);
+        }
+    } while (ret == SCRCPY_EXIT_DISCONNECTED && args.opts.auto_reconnect);
 
     sc_main_thread_destroy();
 

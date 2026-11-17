@@ -25,7 +25,16 @@ struct sc_fps_counter {
     unsigned nr_rendered;
     unsigned nr_skipped;
     sc_tick next_timestamp;
+
+    void (*cb)(uint32_t fps, void *userdata);
+    void *cb_userdata;
 };
+
+typedef void (*sc_fps_counter_cb)(uint32_t fps, void *userdata);
+
+void
+sc_fps_counter_set_callback(struct sc_fps_counter *counter,
+                            sc_fps_counter_cb cb, void *userdata);
 
 bool
 sc_fps_counter_init(struct sc_fps_counter *counter);

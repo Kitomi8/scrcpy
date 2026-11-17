@@ -373,6 +373,7 @@ struct scrcpy_options {
     bool flex_display;
     bool ignore_video_encoder_constraints;
     bool update_terminal_title;
+    bool auto_reconnect;
 };
 
 extern const struct scrcpy_options scrcpy_options_default;

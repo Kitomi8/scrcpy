@@ -22,13 +22,23 @@ sc_fps_counter_init(struct sc_fps_counter *counter) {
 
     counter->thread_started = false;
     atomic_init(&counter->started, 0);
+    counter->cb = NULL;
+    counter->cb_userdata = NULL;
     // no need to initialize the other fields, they are unused until started
 
     return true;
 }
 
 void
+sc_fps_counter_set_callback(struct sc_fps_counter *counter,
+                            sc_fps_counter_cb cb, void *userdata) {
+    counter->cb = cb;
+    counter->cb_userdata = userdata;
+}
+
+void
 sc_fps_counter_destroy(struct sc_fps_counter *counter) {
+    counter->cb = NULL;
     sc_cond_destroy(&counter->state_cond);
     sc_mutex_destroy(&counter->mutex);
 }
@@ -53,6 +63,10 @@ display_fps(struct sc_fps_counter *counter) {
                                             counter->nr_skipped);
     } else {
         LOGI("%u fps", rendered_per_second);
+    }
+
+    if (counter->cb) {
+        counter->cb((uint32_t) rendered_per_second, counter->cb_userdata);
     }
 }
 
@@ -128,6 +142,10 @@ sc_fps_counter_stop(struct sc_fps_counter *counter) {
     set_started(counter, false);
     sc_cond_signal(&counter->state_cond);
     LOGI("FPS counter stopped");
+
+    if (counter->cb) {
+        counter->cb(UINT32_MAX, counter->cb_userdata);
+    }
 }
 
 bool

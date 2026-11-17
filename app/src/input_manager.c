@@ -222,6 +222,11 @@ set_display_power(struct sc_input_manager *im, bool on) {
     }
 }
 
+static inline void
+sc_input_manager_req_set_display_power(struct sc_input_manager *im, bool on) {
+    set_display_power(im, on);
+}
+
 static void
 switch_fps_counter_state(struct sc_input_manager *im) {
     struct sc_fps_counter *fps_counter = &im->screen->fps_counter;
@@ -455,6 +460,39 @@ sc_input_manager_process_key(struct sc_input_manager *im,
                 bool super = mod & SDL_KMOD_GUI;
                 if (!ctrl && !shift && !alt && !super) {
                     sc_screen_toggle_fullscreen(im->screen);
+                }
+            }
+            return;
+        case SDLK_F12:
+            if (down && !repeat && im->controller) {
+                if (!im->camera) {
+                    sc_input_manager_req_set_display_power(im, true);
+                }
+
+                struct sc_control_msg msg_down = {
+                    .type = SC_CONTROL_MSG_TYPE_INJECT_KEYCODE,
+                    .inject_keycode = {
+                        .action = AKEY_EVENT_ACTION_DOWN,
+                        .keycode = AKEYCODE_WAKEUP,
+                        .metastate = 0,
+                        .repeat = 0,
+                    },
+                };
+                if (!sc_controller_push_msg(im->controller, &msg_down)) {
+                    LOGW("Could not request 'inject AKEYCODE_WAKEUP (DOWN)'");
+                }
+
+                struct sc_control_msg msg_up = {
+                    .type = SC_CONTROL_MSG_TYPE_INJECT_KEYCODE,
+                    .inject_keycode = {
+                        .action = AKEY_EVENT_ACTION_UP,
+                        .keycode = AKEYCODE_WAKEUP,
+                        .metastate = 0,
+                        .repeat = 0,
+                    },
+                };
+                if (!sc_controller_push_msg(im->controller, &msg_up)) {
+                    LOGW("Could not request 'inject AKEYCODE_WAKEUP (UP)'");
                 }
             }
             return;

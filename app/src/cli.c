@@ -112,6 +112,7 @@ enum {
     OPT_IGNORE_VIDEO_ENCODER_CONSTRAINTS,
     OPT_NO_TERMINAL_TITLE,
     OPT_HWDEC,
+    OPT_AUTO_RECONNECT,
 };
 
 struct sc_option {
@@ -250,6 +251,11 @@ static const struct sc_option options[] = {
                 "milliseconds).\n"
                 "Do not change this setting unless you have a good reason.\n"
                 "Default is 10.",
+    },
+    {
+        .longopt_id = OPT_AUTO_RECONNECT,
+        .longopt = "auto-reconnect",
+        .text = "Automatically reconnect on device disconnection.",
     },
     {
         .shortopt = 'b',
@@ -2727,6 +2733,9 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
                     return false;
                 }
                 opts->key_inject_mode = SC_KEY_INJECT_MODE_RAW;
+                break;
+            case OPT_AUTO_RECONNECT:
+                opts->auto_reconnect = true;
                 break;
             case OPT_DISPLAY_ORIENTATION:
                 if (!parse_orientation(optarg, &opts->display_orientation)) {

@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SurfaceEncoder implements AsyncProcessor {
 
-    private static final int DEFAULT_I_FRAME_INTERVAL = 10; // seconds
+    private static final int DEFAULT_I_FRAME_INTERVAL = 1; // seconds
     private static final int REPEAT_FRAME_DELAY_US = 100_000; // repeat after 100ms
     private static final String KEY_MAX_FPS_TO_ENCODER = "max-fps-to-encoder";
 
@@ -325,8 +325,8 @@ public class SurfaceEncoder implements AsyncProcessor {
             format.setInteger(MediaFormat.KEY_PRIORITY, 0);
         }
         if (Build.VERSION.SDK_INT >= AndroidVersions.API_26_ANDROID_8_0) {
-            // output 1 frame as soon as 1 frame is queued
-            format.setInteger(MediaFormat.KEY_LATENCY, 1);
+            // output frame with minimum latency
+            format.setInteger(MediaFormat.KEY_LATENCY, 0);
         }
         if (maxFps > 0) {
             // The key existed privately before Android 10:

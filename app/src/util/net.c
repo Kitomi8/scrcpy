@@ -150,6 +150,12 @@ net_connect(sc_socket socket, uint32_t addr, uint16_t port) {
         return false;
     }
 
+    int nodelay = 1;
+    if (setsockopt(raw_sock, IPPROTO_TCP, TCP_NODELAY, (const void *) &nodelay,
+                   sizeof(nodelay)) == -1) {
+        net_perror("setsockopt(TCP_NODELAY)");
+    }
+
     return true;
 }
 
@@ -199,6 +205,14 @@ net_accept(sc_socket server_socket) {
         return SC_SOCKET_NONE;
     }
 #endif
+
+    if (raw_sock != SC_RAW_SOCKET_NONE) {
+        int nodelay = 1;
+        if (setsockopt(raw_sock, IPPROTO_TCP, TCP_NODELAY, (const void *) &nodelay,
+                       sizeof(nodelay)) == -1) {
+            net_perror("setsockopt(TCP_NODELAY)");
+        }
+    }
 
     return wrap(raw_sock);
 }
