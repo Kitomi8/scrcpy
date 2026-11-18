@@ -69,11 +69,16 @@ Pressing <kbd>Esc</kbd> directly triggers the Android **BACK** action.
 | <kbd>Alt</kbd>+<kbd>Esc</kbd> | Alternative Back shortcut using the modifier key. |
 | Right-click (mouse) | Also triggers Back when the device screen is on. |
 
-### 3.3. Automatic Reconnection
-When your connection drops (e.g. Wi-Fi disconnect, loose cable), scrcpy automatically attempts reconnection without needing to restart manually.
+### 3.3. Seamless Automatic Reconnection
+Automatic reconnection is **enabled by default**. If the USB cable is accidentally bumped, disconnected, or unplugged:
+- The scrcpy window **remains open** (does not quit or disappear).
+- The window displays the disconnected icon and the title bar updates to `[Disconnected - Reconnecting...]`.
+- As soon as the cable is plugged back in, scrcpy detects the device and automatically resumes video mirroring in the exact same window.
+- Screen off (`-S`) and your other options are automatically re-applied upon reconnection.
 
+To disable this behavior and immediately exit on disconnection:
 ```cmd
-scrcpy --auto-reconnect
+scrcpy --no-auto-reconnect
 ```
 
 ### 3.4. Social Media & Navigation Mode (<kbd>F10</kbd>)
@@ -168,7 +173,7 @@ scrcpy -S -w --temperature --auto-reconnect
 - **`-S` (`--turn-screen-off`)**: Powers OFF the physical OLED/LCD display on the phone immediately when mirroring begins. The phone remains fully controllable on your PC window while its physical screen stays completely black.
 - **`-w` (`--stay-awake`)**: Keeps the Android OS active while plugged in so it won't go to sleep or lock up, allowing seamless PC interaction without touching the physical phone.
 - **`--temperature`**: Monitors device temperature in real-time in the title bar (e.g. `[34.2°C]`).
-- **`--auto-reconnect`**: Automatically reconnects if the cable is jiggled or temporarily disconnected.
+- **`--auto-reconnect`** *(enabled by default)*: Automatically reconnects if the cable is disconnected; the window stays open with a reconnecting screen and automatically resumes display once re-plugged. (Use `--no-auto-reconnect` to exit on disconnect).
 
 ### 7.2. Toggling the Physical Screen at Runtime
 You do not need to restart scrcpy to toggle the phone's physical screen:

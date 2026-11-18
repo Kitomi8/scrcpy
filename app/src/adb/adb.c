@@ -665,6 +665,33 @@ sc_adb_select_device(struct sc_intr *intr,
     return true;
 }
 
+bool
+sc_adb_is_device_available(struct sc_intr *intr,
+                           const struct sc_adb_device_selector *selector,
+                           unsigned flags) {
+    struct sc_vec_adb_devices vec = SC_VECTOR_INITIALIZER;
+    bool ok = sc_adb_list_devices(intr, flags | SC_ADB_SILENT, &vec);
+    if (!ok || vec.size == 0) {
+        sc_adb_devices_destroy(&vec);
+        return false;
+    }
+
+    size_t sel_idx;
+    size_t sel_count =
+        sc_adb_devices_select(vec.data, vec.size, selector, &sel_idx);
+
+    bool available = false;
+    if (sel_count == 1) {
+        struct sc_adb_device *device = &vec.data[sel_idx];
+        if (device->state && !strcmp("device", device->state)) {
+            available = true;
+        }
+    }
+
+    sc_adb_devices_destroy(&vec);
+    return available;
+}
+
 char *
 sc_adb_getprop(struct sc_intr *intr, const char *serial, const char *prop,
                unsigned flags) {

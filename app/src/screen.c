@@ -257,7 +257,7 @@ sc_screen_update_content_rect(struct sc_screen *screen) {
 //
 // Set the update_content_rect flag if the window or content size may have
 // changed, so that the content rectangle is recomputed
-static void
+void
 sc_screen_render(struct sc_screen *screen, bool update_content_rect) {
     assert(screen->window_shown);
 
@@ -535,6 +535,12 @@ sc_screen_update_title(struct sc_screen *screen) {
 
     char title[512];
     int len = snprintf(title, sizeof(title), "%s", screen->window_title);
+
+    if (screen->disconnected) {
+        snprintf(title + len, sizeof(title) - len, " [Disconnected - Reconnecting...]");
+        SDL_SetWindowTitle(screen->window, title);
+        return;
+    }
 
     if (screen->current_fps != UINT32_MAX && len < (int) sizeof(title)) {
         len += snprintf(title + len, sizeof(title) - len, " [%" PRIu32 " FPS]",
@@ -833,6 +839,12 @@ error_destroy_mutex:
 
 static void
 sc_screen_show_initial_window(struct sc_screen *screen) {
+    if (screen->window_shown) {
+        set_aspect_ratio(screen, screen->content_size);
+        sc_screen_update_content_rect(screen);
+        return;
+    }
+
     int x = screen->req.x != SC_WINDOW_POSITION_UNDEFINED
           ? screen->req.x : (int) SDL_WINDOWPOS_CENTERED;
     int y = screen->req.y != SC_WINDOW_POSITION_UNDEFINED
@@ -1324,6 +1336,7 @@ sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event) {
         case SC_EVENT_DEVICE_DISCONNECTED:
             assert(!screen->disconnected);
             screen->disconnected = true;
+            sc_screen_update_title(screen);
             if (!screen->window_shown) {
                 // No window open
                 return;
@@ -1460,4 +1473,72 @@ sc_screen_convert_window_to_frame_coords(struct sc_screen *screen,
     }
 
     return result;
+}
+
+void
+sc_screen_set_disconnected_icon(struct sc_screen *screen, SDL_Surface *icon) {
+    if (sc_screen_set_texture_from_surface(screen, icon)) {
+        screen->content_size.width = icon->w;
+        screen->content_size.height = icon->h;
+        sc_screen_render(screen, true);
+    }
+}
+
+void
+sc_screen_resume(struct sc_screen *screen, struct sc_controller *controller,
+                 struct sc_file_pusher *fp, struct sc_key_processor *kp,
+                 struct sc_mouse_processor *mp, struct sc_gamepad_processor *gp,
+                 const char *serial, const char *window_title) {
+    if (screen->disconnect_started) {
+        sc_disconnect_interrupt(&screen->disconnect);
+        sc_disconnect_join(&screen->disconnect);
+        sc_disconnect_destroy(&screen->disconnect);
+        screen->disconnect_started = false;
+    }
+
+    if (screen->icon_tex) {
+        SDL_DestroyTexture(screen->icon_tex);
+        screen->icon_tex = NULL;
+    }
+
+    screen->is_icon_active = false;
+    screen->disconnected = false;
+    screen->paused = false;
+
+    sc_mutex_lock(&screen->mutex);
+    if (!screen->fb.pending_frame_consumed) {
+        av_frame_unref(screen->fb.pending_frame);
+        screen->fb.pending_frame_consumed = true;
+    }
+    sc_mutex_unlock(&screen->mutex);
+
+    screen->controller = controller;
+    screen->im.controller = controller;
+    screen->im.fp = fp;
+    screen->im.kp = kp;
+    screen->im.mp = mp;
+    screen->im.gp = gp;
+    screen->im.disconnected = false;
+
+    if (window_title && (!screen->window_title || strcmp(screen->window_title, window_title))) {
+        free(screen->window_title);
+        screen->window_title = strdup(window_title);
+    }
+
+    if (screen->req.start_temp_monitor && serial) {
+        sc_temp_monitor_interrupt(&screen->temp_monitor);
+        sc_temp_monitor_join(&screen->temp_monitor);
+        sc_temp_monitor_destroy(&screen->temp_monitor);
+        if (sc_temp_monitor_init(&screen->temp_monitor, serial)) {
+            sc_temp_monitor_set_callback(&screen->temp_monitor,
+                                         sc_screen_temp_callback, screen);
+            sc_temp_monitor_start(&screen->temp_monitor);
+        }
+    }
+
+    if (screen->req.start_fps_counter) {
+        sc_fps_counter_start(&screen->fps_counter);
+    }
+
+    sc_screen_update_title(screen);
 }

@@ -49,4 +49,8 @@ sc_run_on_main_thread(sc_runnable_fn run, void *userdata, bool wait_complete);
 void
 sc_main_thread_stop(void);
 
+// Allow runnables again after sc_main_thread_stop()
+void
+sc_main_thread_restart(void);
+
 #endif

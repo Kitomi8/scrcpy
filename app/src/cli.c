@@ -113,6 +113,7 @@ enum {
     OPT_NO_TERMINAL_TITLE,
     OPT_HWDEC,
     OPT_AUTO_RECONNECT,
+    OPT_NO_AUTO_RECONNECT,
     OPT_PRINT_TEMPERATURE,
 };
 
@@ -257,6 +258,11 @@ static const struct sc_option options[] = {
         .longopt_id = OPT_AUTO_RECONNECT,
         .longopt = "auto-reconnect",
         .text = "Automatically reconnect on device disconnection.",
+    },
+    {
+        .longopt_id = OPT_NO_AUTO_RECONNECT,
+        .longopt = "no-auto-reconnect",
+        .text = "Disable automatic reconnection on device disconnection.",
     },
     {
         .shortopt = 'b',
@@ -2753,6 +2759,9 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
                 break;
             case OPT_AUTO_RECONNECT:
                 opts->auto_reconnect = true;
+                break;
+            case OPT_NO_AUTO_RECONNECT:
+                opts->auto_reconnect = false;
                 break;
             case OPT_DISPLAY_ORIENTATION:
                 if (!parse_orientation(optarg, &opts->display_orientation)) {

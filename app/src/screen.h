@@ -214,9 +214,24 @@ sc_screen_set_social_mode(struct sc_screen *screen, bool enabled);
 void
 sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event);
 
+// render the current texture
+void
+sc_screen_render(struct sc_screen *screen, bool update_content_rect);
+
 // run the event loop once the device is disconnected
 void
 sc_screen_handle_disconnection(struct sc_screen *screen);
+
+// display the disconnected icon
+void
+sc_screen_set_disconnected_icon(struct sc_screen *screen, SDL_Surface *icon);
+
+// resume screen when reconnecting
+void
+sc_screen_resume(struct sc_screen *screen, struct sc_controller *controller,
+                 struct sc_file_pusher *fp, struct sc_key_processor *kp,
+                 struct sc_mouse_processor *mp, struct sc_gamepad_processor *gp,
+                 const char *serial, const char *window_title);
 
 // convert point from window coordinates to frame coordinates
 // x and y are expressed in pixels

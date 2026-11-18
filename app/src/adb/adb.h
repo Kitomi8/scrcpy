@@ -105,6 +105,14 @@ sc_adb_select_device(struct sc_intr *intr,
                      unsigned flags, struct sc_adb_device *out_device);
 
 /**
+ * Execute `adb devices` and check if a matching device is available (state "device")
+ */
+bool
+sc_adb_is_device_available(struct sc_intr *intr,
+                           const struct sc_adb_device_selector *selector,
+                           unsigned flags);
+
+/**
  * Execute `adb getprop <prop>`
  */
 char *

@@ -26,7 +26,7 @@ scrcpy -S -w --temperature --auto-reconnect
 - **`-S` (`--turn-screen-off`)** : Éteint instantanément l'écran physique du téléphone dès le démarrage. L'écran devient totalement noir, mais la fenêtre sur votre PC reste fluide et réactive.
 - **`-w` (`--stay-awake`)** : Empêche Android d'entrer en veille profonde lorsqu'il est branché. Le téléphone reste opérationnel sans jamais se verrouiller pendant que vous l'utilisez.
 - **`--temperature`** : Affiche la température mesurée de la batterie en temps réel directement dans la barre de titre de la fenêtre (ex: `Pixel 8 [33.4°C]`).
-- **`--auto-reconnect`** : Reconnecte automatiquement la session si le câble USB est heurté ou temporairement débranché.
+- **`--auto-reconnect`** *(activé par défaut)* : Si le câble USB est débranché ou heurté accidentellement, la fenêtre scrcpy **ne se ferme pas** : elle affiche un écran d'attente `[Disconnected - Reconnecting...]` et reprend automatiquement l'affichage dès que le câble est rebranché. (Utilisez `--no-auto-reconnect` pour quitter immédiatement en cas de déconnexion).
 
 ---
 

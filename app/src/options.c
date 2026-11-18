@@ -124,7 +124,7 @@ const struct scrcpy_options scrcpy_options_default = {
     .flex_display = false,
     .ignore_video_encoder_constraints = false,
     .update_terminal_title = true,
-    .auto_reconnect = false,
+    .auto_reconnect = true,
     .print_temperature = false,
 };
 

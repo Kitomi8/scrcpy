@@ -112,6 +112,7 @@ static void test_options2(void) {
         "--no-control",
         "--no-playback",
         "--record", "file.mp4", // cannot enable --no-playback without recording
+        "--no-auto-reconnect",
     };
 
     bool ok = scrcpy_parse_args(&args, ARRAY_LEN(argv), argv);
@@ -121,6 +122,7 @@ static void test_options2(void) {
     assert(!opts->control);
     assert(!opts->video_playback);
     assert(!opts->audio_playback);
+    assert(!opts->auto_reconnect);
     assert(!strcmp(opts->record_filename, "file.mp4"));
     assert(opts->record_format == SC_RECORD_FORMAT_MP4);
 }

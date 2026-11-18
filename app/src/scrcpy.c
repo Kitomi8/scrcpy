@@ -14,6 +14,7 @@
 # include <windows.h>
 #endif
 
+#include "adb/adb.h"
 #include "audio_player.h"
 #include "controller.h"
 #include "decoder.h"
@@ -21,6 +22,7 @@
 #include "events.h"
 #include "file_pusher.h"
 #include "hwdec.h"
+#include "icon.h"
 #include "keyboard_sdk.h"
 #include "mouse_sdk.h"
 #include "recorder.h"
@@ -398,6 +400,7 @@ scrcpy(struct scrcpy_options *options) {
 
     enum scrcpy_exit_code ret = SCRCPY_EXIT_FAILURE;
 
+    bool screen_initialized = false;
     bool server_started = false;
     bool file_pusher_initialized = false;
     bool recorder_initialized = false;
@@ -422,12 +425,100 @@ scrcpy(struct scrcpy_options *options) {
 #endif
     bool controller_initialized = false;
     bool controller_started = false;
-    bool screen_initialized = false;
     bool timeout_initialized = false;
     bool timeout_started = false;
     bool disconnected = false;
 
     struct sc_acksync *acksync = NULL;
+
+#ifdef _WIN32
+    sdl_configure_ctrl_c_windows();
+#endif
+
+    // Set hints before starting the server thread to avoid race conditions in
+    // SDL
+    sc_sdl_set_hints(options->render_driver, options->disable_screensaver);
+
+    // playback implies capture
+    assert(!options->video_playback || options->video);
+    assert(!options->audio_playback || options->audio);
+
+    if (options->window ||
+            (options->control && options->clipboard_autosync)) {
+        if (!SDL_Init(SDL_INIT_VIDEO)) {
+            if (options->video_playback) {
+                LOGE("Could not initialize SDL video: %s", SDL_GetError());
+                return SCRCPY_EXIT_FAILURE;
+            } else {
+                LOGW("Could not initialize SDL video: %s", SDL_GetError());
+            }
+        }
+    }
+
+    if (options->audio_playback) {
+        if (!SDL_Init(SDL_INIT_AUDIO)) {
+            LOGE("Could not initialize SDL audio: %s", SDL_GetError());
+            return SCRCPY_EXIT_FAILURE;
+        }
+    }
+
+    if (options->gamepad_input_mode != SC_GAMEPAD_INPUT_MODE_DISABLED) {
+        if (!SDL_Init(SDL_INIT_GAMEPAD)) {
+            LOGE("Could not initialize SDL gamepad: %s", SDL_GetError());
+            return SCRCPY_EXIT_FAILURE;
+        }
+    }
+
+    struct sc_adb_device_selector selector;
+    if (options->serial) {
+        selector.type = SC_ADB_DEVICE_SELECT_SERIAL;
+        selector.serial = options->serial;
+    } else if (options->select_usb) {
+        selector.type = SC_ADB_DEVICE_SELECT_USB;
+        selector.serial = NULL;
+    } else if (options->select_tcpip) {
+        selector.type = SC_ADB_DEVICE_SELECT_TCPIP;
+        selector.serial = NULL;
+    } else {
+        const char *env_serial = getenv("ANDROID_SERIAL");
+        if (env_serial) {
+            selector.type = SC_ADB_DEVICE_SELECT_SERIAL;
+            selector.serial = env_serial;
+        } else {
+            selector.type = SC_ADB_DEVICE_SELECT_ALL;
+            selector.serial = NULL;
+        }
+    }
+
+session_start:
+    server_started = false;
+    file_pusher_initialized = false;
+    recorder_initialized = false;
+    recorder_started = false;
+#ifdef HAVE_V4L2
+    v4l2_sink_initialized = false;
+    v4l2_regulator_initialized = false;
+#endif
+    video_regulator_initialized = false;
+    video_demuxer_started = false;
+    audio_demuxer_started = false;
+    hwdec_initialized = false;
+    video_decoder_initialized = false;
+    video_decoder_started = false;
+    audio_decoder_initialized = false;
+    audio_decoder_started = false;
+#ifdef HAVE_USB
+    aoa_hid_initialized = false;
+    keyboard_aoa_initialized = false;
+    mouse_aoa_initialized = false;
+    gamepad_aoa_initialized = false;
+#endif
+    controller_initialized = false;
+    controller_started = false;
+    timeout_initialized = false;
+    timeout_started = false;
+    disconnected = false;
+    acksync = NULL;
 
     uint32_t scid = scrcpy_generate_scid();
 
@@ -502,15 +593,13 @@ scrcpy(struct scrcpy_options *options) {
         return SCRCPY_EXIT_FAILURE;
     }
 
-#ifdef _WIN32
-    sdl_configure_ctrl_c_windows();
-#endif
-
-    // Set hints before starting the server thread to avoid race conditions in
-    // SDL
-    sc_sdl_set_hints(options->render_driver, options->disable_screensaver);
-
     if (!sc_server_start(&s->server)) {
+        sc_server_destroy(&s->server);
+        if (screen_initialized && options->auto_reconnect) {
+            disconnected = true;
+            ret = SCRCPY_EXIT_DISCONNECTED;
+            goto wait_reconnect;
+        }
         goto end;
     }
 
@@ -522,45 +611,15 @@ scrcpy(struct scrcpy_options *options) {
         goto end;
     }
 
-    // playback implies capture
-    assert(!options->video_playback || options->video);
-    assert(!options->audio_playback || options->audio);
-
-    if (options->window ||
-            (options->control && options->clipboard_autosync)) {
-        // Initialize the video subsystem even if --no-video or
-        // --no-video-playback is passed so that clipboard synchronization
-        // still works.
-        // <https://github.com/Genymobile/scrcpy/issues/4418>
-        if (!SDL_Init(SDL_INIT_VIDEO)) {
-            // If it fails, it is an error only if video playback is enabled
-            if (options->video_playback) {
-                LOGE("Could not initialize SDL video: %s", SDL_GetError());
-                goto end;
-            } else {
-                LOGW("Could not initialize SDL video: %s", SDL_GetError());
-            }
-        }
-    }
-
-    if (options->audio_playback) {
-        if (!SDL_Init(SDL_INIT_AUDIO)) {
-            LOGE("Could not initialize SDL audio: %s", SDL_GetError());
-            goto end;
-        }
-    }
-
-    if (options->gamepad_input_mode != SC_GAMEPAD_INPUT_MODE_DISABLED) {
-        if (!SDL_Init(SDL_INIT_GAMEPAD)) {
-            LOGE("Could not initialize SDL gamepad: %s", SDL_GetError());
-            goto end;
-        }
-    }
-
     // Await for server without blocking Ctrl+C handling
     bool connected;
     if (!await_for_server(&connected)) {
         LOGE("Server connection failed");
+        if (screen_initialized && options->auto_reconnect) {
+            disconnected = true;
+            ret = SCRCPY_EXIT_DISCONNECTED;
+            goto wait_reconnect;
+        }
         goto end;
     }
 
@@ -819,42 +878,46 @@ aoa_complete:
     assert(options->control == !!controller);
 
     if (options->window) {
-        struct sc_screen_params screen_params = {
-            .video = options->video_playback,
-            .camera = options->video_source == SC_VIDEO_SOURCE_CAMERA,
-            .flex_display = options->flex_display,
-            .controller = controller,
-            .fp = fp,
-            .kp = kp,
-            .mp = mp,
-            .gp = gp,
-            .mouse_bindings = options->mouse_bindings,
-            .legacy_paste = options->legacy_paste,
-            .clipboard_autosync = options->clipboard_autosync,
-            .shortcut_mods = options->shortcut_mods,
-            .window_title = window_title,
-            .always_on_top = options->always_on_top,
-            .window_x = options->window_x,
-            .window_y = options->window_y,
-            .window_width = options->window_width,
-            .window_height = options->window_height,
-            .background_color = options->background_color,
-            .window_aspect_ratio_lock = options->window_aspect_ratio_lock,
-            .window_borderless = options->window_borderless,
-            .render_fit = options->render_fit,
-            .orientation = options->display_orientation,
-            .mipmaps = options->mipmaps,
-            .hwdec_mode = options->hwdec_mode,
-            .fullscreen = options->fullscreen,
-            .start_fps_counter = options->start_fps_counter,
-            .start_temp_monitor = options->print_temperature,
-            .serial = serial,
-        };
+        if (!screen_initialized) {
+            struct sc_screen_params screen_params = {
+                .video = options->video_playback,
+                .camera = options->video_source == SC_VIDEO_SOURCE_CAMERA,
+                .flex_display = options->flex_display,
+                .controller = controller,
+                .fp = fp,
+                .kp = kp,
+                .mp = mp,
+                .gp = gp,
+                .mouse_bindings = options->mouse_bindings,
+                .legacy_paste = options->legacy_paste,
+                .clipboard_autosync = options->clipboard_autosync,
+                .shortcut_mods = options->shortcut_mods,
+                .window_title = window_title,
+                .always_on_top = options->always_on_top,
+                .window_x = options->window_x,
+                .window_y = options->window_y,
+                .window_width = options->window_width,
+                .window_height = options->window_height,
+                .background_color = options->background_color,
+                .window_aspect_ratio_lock = options->window_aspect_ratio_lock,
+                .window_borderless = options->window_borderless,
+                .render_fit = options->render_fit,
+                .orientation = options->display_orientation,
+                .mipmaps = options->mipmaps,
+                .hwdec_mode = options->hwdec_mode,
+                .fullscreen = options->fullscreen,
+                .start_fps_counter = options->start_fps_counter,
+                .start_temp_monitor = options->print_temperature,
+                .serial = serial,
+            };
 
-        if (!sc_screen_init(&s->screen, &screen_params)) {
-            goto end;
+            if (!sc_screen_init(&s->screen, &screen_params)) {
+                goto end;
+            }
+            screen_initialized = true;
+        } else {
+            sc_screen_resume(&s->screen, controller, fp, kp, mp, gp, serial, window_title);
         }
-        screen_initialized = true;
     }
 
     bool needs_video_decoder = options->video_playback;
@@ -1052,6 +1115,10 @@ aoa_complete:
 
     disconnected = ret == SCRCPY_EXIT_DISCONNECTED;
 
+    if (disconnected && options->auto_reconnect && screen_initialized) {
+        goto wait_reconnect;
+    }
+
 end:
     if (timeout_started) {
         sc_timeout_stop(&s->timeout);
@@ -1216,4 +1283,194 @@ end:
     sc_server_destroy(&s->server);
 
     return ret;
+
+wait_reconnect:
+    if (timeout_started) {
+        sc_timeout_stop(&s->timeout);
+    }
+
+#ifdef HAVE_USB
+    if (aoa_hid_initialized) {
+        sc_aoa_stop(&s->aoa);
+        sc_usb_stop(&s->usb);
+    }
+#endif
+    if (controller_started) {
+        sc_controller_stop(&s->controller);
+    }
+    if (file_pusher_initialized) {
+        sc_file_pusher_stop(&s->file_pusher);
+    }
+    if (video_decoder_started) {
+        sc_decoder_stop(&s->video_decoder);
+    }
+    if (audio_decoder_started) {
+        sc_decoder_stop(&s->audio_decoder);
+    }
+    if (video_regulator_initialized) {
+        sc_video_regulator_stop(&s->video_regulator);
+    }
+#ifdef HAVE_V4L2
+    if (v4l2_regulator_initialized) {
+        sc_video_regulator_stop(&s->v4l2_regulator);
+    }
+#endif
+    if (recorder_initialized) {
+        sc_recorder_stop(&s->recorder);
+    }
+
+    if (server_started) {
+        sc_server_stop(&s->server);
+    }
+
+    if (video_decoder_started) {
+        sc_decoder_join(&s->video_decoder);
+    }
+
+    if (audio_decoder_started) {
+        sc_decoder_join(&s->audio_decoder);
+    }
+
+    if (timeout_started) {
+        sc_timeout_join(&s->timeout);
+    }
+    if (timeout_initialized) {
+        sc_timeout_destroy(&s->timeout);
+    }
+
+    if (video_demuxer_started) {
+        sc_demuxer_join(&s->video_demuxer);
+    }
+
+    if (audio_demuxer_started) {
+        sc_demuxer_join(&s->audio_demuxer);
+    }
+
+    if (video_regulator_initialized) {
+        sc_video_regulator_destroy(&s->video_regulator);
+    }
+
+#ifdef HAVE_V4L2
+    if (v4l2_regulator_initialized) {
+        sc_video_regulator_destroy(&s->v4l2_regulator);
+    }
+    if (v4l2_sink_initialized) {
+        sc_v4l2_sink_destroy(&s->v4l2_sink);
+    }
+#endif
+
+#ifdef HAVE_USB
+    if (aoa_hid_initialized) {
+        sc_aoa_join(&s->aoa);
+        sc_aoa_destroy(&s->aoa);
+        sc_usb_join(&s->usb);
+        sc_usb_disconnect(&s->usb);
+        sc_usb_destroy(&s->usb);
+
+        if (keyboard_aoa_initialized) {
+            sc_keyboard_aoa_destroy(&s->keyboard_aoa);
+        }
+        if (mouse_aoa_initialized) {
+            sc_mouse_aoa_destroy(&s->mouse_aoa);
+        }
+        if (gamepad_aoa_initialized) {
+            sc_gamepad_aoa_destroy(&s->gamepad_aoa);
+        }
+    }
+    if (acksync) {
+        sc_acksync_destroy(acksync);
+    }
+#endif
+
+    if (video_decoder_initialized) {
+        sc_decoder_destroy(&s->video_decoder);
+    }
+
+    if (hwdec_initialized) {
+        sc_hwdec_destroy(&s->hwdec);
+    }
+
+    if (audio_decoder_initialized) {
+        sc_decoder_destroy(&s->audio_decoder);
+    }
+
+    if (controller_started) {
+        sc_controller_join(&s->controller);
+    }
+    if (controller_initialized) {
+        sc_controller_destroy(&s->controller);
+    }
+
+    if (recorder_started) {
+        sc_recorder_join(&s->recorder);
+    }
+    if (recorder_initialized) {
+        sc_recorder_destroy(&s->recorder);
+    }
+
+    if (file_pusher_initialized) {
+        sc_file_pusher_join(&s->file_pusher);
+        sc_file_pusher_destroy(&s->file_pusher);
+    }
+
+    if (server_started) {
+        sc_server_join(&s->server);
+    }
+
+    sc_server_destroy(&s->server);
+
+    LOGI("Device disconnected. Window staying open, waiting for reconnect...");
+
+    bool reconnect_quit = false;
+    sc_tick last_check_time = 0;
+
+    while (!reconnect_quit) {
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            switch (event.type) {
+                case SDL_EVENT_QUIT:
+                    LOGD("User requested to quit while waiting for reconnect");
+                    reconnect_quit = true;
+                    ret = SCRCPY_EXIT_SUCCESS;
+                    break;
+                case SC_EVENT_DISCONNECTED_ICON_LOADED: {
+                    SDL_Surface *icon = event.user.data1;
+                    if (icon) {
+                        sc_screen_set_disconnected_icon(&s->screen, icon);
+                        sc_icon_destroy(icon);
+                    }
+                    break;
+                }
+                case SDL_EVENT_WINDOW_EXPOSED:
+                case SDL_EVENT_WINDOW_RESIZED:
+                case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+                    sc_screen_render(&s->screen, true);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        if (reconnect_quit) {
+            sc_screen_interrupt(&s->screen);
+            sc_screen_hide_window(&s->screen);
+            sc_screen_join(&s->screen);
+            sc_screen_destroy(&s->screen);
+            return ret;
+        }
+
+        sc_tick now = sc_tick_now();
+        if (now - last_check_time >= SC_TICK_FROM_MS(1000)) {
+            last_check_time = now;
+            if (sc_adb_is_device_available(NULL, &selector, SC_ADB_SILENT)) {
+                LOGI("Device detected via ADB! Reconnecting session...");
+                break;
+            }
+        }
+
+        SDL_Delay(50);
+    }
+
+    sc_main_thread_restart();
+    goto session_start;
 }
