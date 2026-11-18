@@ -39,6 +39,7 @@ Pendant que scrcpy tourne, vous pouvez contrôler l'écran physique et la tempé
 | <kbd>Alt</kbd> + <kbd>o</kbd> | **Éteindre** l'écran physique du téléphone (le miroir PC reste actif). |
 | <kbd>Alt</kbd> + <kbd>Maj</kbd> + <kbd>o</kbd> | **Rallumer** l'écran physique du téléphone. |
 | <kbd>Alt</kbd> + <kbd>t</kbd> | **Afficher / masquer** la température dans la barre de titre. |
+| <kbd>F10</kbd> | **Mode Navigation & Réseaux Sociaux** (TikTok, Reels, Stories au clavier). |
 | <kbd>Échap</kbd> ou <kbd>Alt</kbd> + <kbd>Échap</kbd> | Bouton Retour Android (BACK). |
 | <kbd>Alt</kbd> + <kbd>p</kbd> | Bouton Power physique du téléphone. |
 

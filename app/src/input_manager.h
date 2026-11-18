@@ -48,6 +48,7 @@ struct sc_input_manager {
     uint64_t next_sequence; // used for request acknowledgements
 
     bool disconnected;
+    bool social_mode;
 };
 
 struct sc_input_manager_params {

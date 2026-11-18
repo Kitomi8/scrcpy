@@ -49,6 +49,7 @@ sc_input_manager_init(struct sc_input_manager *im,
     im->next_sequence = 1; // 0 is reserved for SC_SEQUENCE_INVALID
 
     im->disconnected = false;
+    im->social_mode = false;
 }
 
 static void
@@ -368,7 +369,7 @@ apply_orientation_transform(struct sc_input_manager *im,
 static void
 sc_input_manager_process_text_input(struct sc_input_manager *im,
                                     const SDL_TextInputEvent *event) {
-    if (im->camera || !im->kp || im->screen->paused || im->disconnected) {
+    if (im->social_mode || im->camera || !im->kp || im->screen->paused || im->disconnected) {
         return;
     }
 
@@ -426,6 +427,267 @@ inverse_point(struct sc_point point, struct sc_size size,
     return point;
 }
 
+static inline int32_t
+sc_social_jitter(int32_t val, int32_t max_val) {
+    if (max_val <= 0) {
+        return val;
+    }
+    int32_t max_delta = (int32_t) (max_val * 0.01f);
+    if (max_delta < 1) {
+        max_delta = 1;
+    }
+    int32_t delta = (rand() % (2 * max_delta + 1)) - max_delta;
+    int32_t res = val + delta;
+    if (res < 0) {
+        res = 0;
+    } else if (res >= max_val) {
+        res = max_val - 1;
+    }
+    return res;
+}
+
+static struct sc_point
+sc_social_get_point(struct sc_screen *screen, float rx, float ry) {
+    int32_t w = screen->content_size.width;
+    int32_t h = screen->content_size.height;
+    if (!w || !h) {
+        w = screen->frame_size.width;
+        h = screen->frame_size.height;
+    }
+
+    int32_t x = sc_social_jitter((int32_t) (rx * w), w);
+    int32_t y = sc_social_jitter((int32_t) (ry * h), h);
+
+    enum sc_orientation orientation = screen->orientation;
+    struct sc_point result;
+    switch (orientation) {
+        case SC_ORIENTATION_0:
+            result.x = x;
+            result.y = y;
+            break;
+        case SC_ORIENTATION_90:
+            result.x = y;
+            result.y = w - x;
+            break;
+        case SC_ORIENTATION_180:
+            result.x = w - x;
+            result.y = h - y;
+            break;
+        case SC_ORIENTATION_270:
+            result.x = h - y;
+            result.y = x;
+            break;
+        case SC_ORIENTATION_FLIP_0:
+            result.x = w - x;
+            result.y = y;
+            break;
+        case SC_ORIENTATION_FLIP_90:
+            result.x = y;
+            result.y = x;
+            break;
+        case SC_ORIENTATION_FLIP_180:
+            result.x = x;
+            result.y = h - y;
+            break;
+        case SC_ORIENTATION_FLIP_270:
+            result.x = h - y;
+            result.y = w - x;
+            break;
+        default:
+            result.x = x;
+            result.y = y;
+            break;
+    }
+    return result;
+}
+
+static bool
+sc_social_send_touch(struct sc_input_manager *im,
+                     enum android_motionevent_action action,
+                     struct sc_point point, float pressure) {
+    struct sc_control_msg msg;
+    msg.type = SC_CONTROL_MSG_TYPE_INJECT_TOUCH_EVENT;
+    msg.inject_touch_event.action = action;
+    msg.inject_touch_event.position.screen_size = im->screen->frame_size;
+    msg.inject_touch_event.position.point = point;
+    msg.inject_touch_event.pointer_id = SC_POINTER_ID_GENERIC_FINGER;
+    msg.inject_touch_event.pressure = pressure;
+    msg.inject_touch_event.action_button = 0;
+    msg.inject_touch_event.buttons = 0;
+
+    return sc_controller_push_msg(im->controller, &msg);
+}
+
+static void
+sc_social_tap(struct sc_input_manager *im, float rx, float ry) {
+    if (!im->controller || !im->screen) {
+        return;
+    }
+    if (!im->screen->frame_size.width || !im->screen->frame_size.height) {
+        return;
+    }
+
+    struct sc_point pt = sc_social_get_point(im->screen, rx, ry);
+    sc_social_send_touch(im, AMOTION_EVENT_ACTION_DOWN, pt, 1.0f);
+    SDL_Delay(25);
+    sc_social_send_touch(im, AMOTION_EVENT_ACTION_UP, pt, 0.0f);
+}
+
+static void
+sc_social_double_tap(struct sc_input_manager *im, float rx, float ry) {
+    sc_social_tap(im, rx, ry);
+    SDL_Delay(55);
+    sc_social_tap(im, rx, ry);
+}
+
+static void
+sc_social_swipe(struct sc_input_manager *im, float rx1, float ry1, float rx2, float ry2) {
+    if (!im->controller || !im->screen) {
+        return;
+    }
+    if (!im->screen->frame_size.width || !im->screen->frame_size.height) {
+        return;
+    }
+
+    struct sc_point start_pt = sc_social_get_point(im->screen, rx1, ry1);
+    struct sc_point end_pt = sc_social_get_point(im->screen, rx2, ry2);
+
+    sc_social_send_touch(im, AMOTION_EVENT_ACTION_DOWN, start_pt, 1.0f);
+    SDL_Delay(12);
+
+    const int steps = 7;
+    for (int i = 1; i <= steps; ++i) {
+        float t = (float) i / (float) steps;
+        int32_t xi = (int32_t) (start_pt.x + t * (end_pt.x - start_pt.x));
+        int32_t yi = (int32_t) (start_pt.y + t * (end_pt.y - start_pt.y));
+        struct sc_point pt = { .x = xi, .y = yi };
+        sc_social_send_touch(im, AMOTION_EVENT_ACTION_MOVE, pt, 1.0f);
+        SDL_Delay(12);
+    }
+
+    sc_social_send_touch(im, AMOTION_EVENT_ACTION_UP, end_pt, 0.0f);
+}
+
+static void
+sc_social_process_key(struct sc_input_manager *im, SDL_Keycode key,
+                      bool shift, bool down, bool repeat) {
+    if (!im->controller || im->screen->paused || im->disconnected || im->camera) {
+        return;
+    }
+
+    if (!down || repeat) {
+        return;
+    }
+
+    switch (key) {
+        // A. Short Videos Navigation (TikTok / Reels / Shorts) & Scrolling
+        case SDLK_DOWN:
+        case SDLK_J:
+            sc_social_swipe(im, 0.50f, 0.78f, 0.50f, 0.22f);
+            return;
+        case SDLK_UP:
+        case SDLK_K:
+            sc_social_swipe(im, 0.50f, 0.22f, 0.50f, 0.78f);
+            return;
+        case SDLK_SPACE:
+            sc_social_tap(im, 0.50f, 0.50f);
+            return;
+
+        // B. Stories Navigation (Instagram Lite / Facebook Lite / TikTok)
+        case SDLK_RIGHT:
+        case SDLK_D:
+            if (shift) {
+                sc_social_swipe(im, 0.85f, 0.50f, 0.15f, 0.50f);
+            } else {
+                sc_social_tap(im, 0.85f, 0.50f);
+            }
+            return;
+        case SDLK_LEFT:
+        case SDLK_Q:
+            if (shift) {
+                sc_social_swipe(im, 0.15f, 0.50f, 0.85f, 0.50f);
+            } else {
+                sc_social_tap(im, 0.15f, 0.50f);
+            }
+            return;
+
+        // C. Social Interactions (Like, Comment, Share, Profile, Messages)
+        case SDLK_L:
+            sc_social_double_tap(im, 0.50f, 0.50f);
+            return;
+        case SDLK_F:
+            sc_social_tap(im, 0.92f, 0.53f);
+            return;
+        case SDLK_C:
+            sc_social_tap(im, 0.92f, 0.64f);
+            return;
+        case SDLK_S:
+            sc_social_tap(im, 0.92f, 0.75f);
+            return;
+        case SDLK_P:
+            if (shift) {
+                sc_social_tap(im, 0.90f, 0.94f);
+            } else {
+                sc_social_tap(im, 0.92f, 0.42f);
+            }
+            return;
+        case SDLK_M:
+            if (shift) {
+                sc_social_tap(im, 0.70f, 0.94f);
+            } else {
+                sc_social_tap(im, 0.91f, 0.07f);
+            }
+            return;
+        case SDLK_R:
+            sc_social_swipe(im, 0.50f, 0.20f, 0.50f, 0.82f);
+            return;
+        case SDLK_A:
+            sc_social_tap(im, 0.10f, 0.94f);
+            return;
+
+        // D. Global Phone Control & Android Utilities
+        case SDLK_N:
+            if (shift) {
+                collapse_panels(im);
+            } else {
+                expand_notification_panel(im);
+            }
+            return;
+        case SDLK_U:
+            expand_settings_panel(im);
+            return;
+        case SDLK_BACKSPACE:
+        case SDLK_ESCAPE:
+            collapse_panels(im);
+            action_back(im, SC_ACTION_DOWN);
+            action_back(im, SC_ACTION_UP);
+            return;
+        case SDLK_H:
+            action_home(im, SC_ACTION_DOWN);
+            action_home(im, SC_ACTION_UP);
+            return;
+        case SDLK_TAB:
+            action_app_switch(im, SC_ACTION_DOWN);
+            action_app_switch(im, SC_ACTION_UP);
+            return;
+        case SDLK_PAGEUP:
+            action_volume_up(im, SC_ACTION_DOWN);
+            action_volume_up(im, SC_ACTION_UP);
+            return;
+        case SDLK_PAGEDOWN:
+            action_volume_down(im, SC_ACTION_DOWN);
+            action_volume_down(im, SC_ACTION_UP);
+            return;
+        case SDLK_V:
+            send_keycode(im, AKEYCODE_SYSRQ, SC_ACTION_DOWN, "SYSRQ");
+            send_keycode(im, AKEYCODE_SYSRQ, SC_ACTION_UP, "SYSRQ");
+            return;
+
+        default:
+            return;
+    }
+}
+
 static void
 sc_input_manager_process_key(struct sc_input_manager *im,
                              const SDL_KeyboardEvent *event) {
@@ -465,6 +727,18 @@ sc_input_manager_process_key(struct sc_input_manager *im,
 
     // Shortcuts that do not involve the MOD key
     switch (sdl_keycode) {
+        case SDLK_F10:
+            if (down && !repeat && !disconnected) {
+                bool alt = mod & SDL_KMOD_ALT;
+                bool super = mod & SDL_KMOD_GUI;
+                if (!ctrl && !alt && !super) {
+                    im->social_mode = !im->social_mode;
+                    sc_screen_set_social_mode(im->screen, im->social_mode);
+                    LOGI("Mode Navigation & Réseaux Sociaux (F10): %s",
+                         im->social_mode ? "ACTIVÉ" : "DÉSACTIVÉ");
+                }
+            }
+            return;
         case SDLK_F11:
             if (video && !repeat && down) {
                 bool alt = mod & SDL_KMOD_ALT;
@@ -510,6 +784,9 @@ sc_input_manager_process_key(struct sc_input_manager *im,
         case SDLK_ESCAPE:
         case SDLK_AC_BACK:
             if (!disconnected && control && !im->camera && im->kp && !paused && !repeat) {
+                if (im->social_mode && down) {
+                    collapse_panels(im);
+                }
                 if (!ctrl) {
                     enum sc_action action = down ? SC_ACTION_DOWN : SC_ACTION_UP;
                     action_back(im, action);
@@ -733,6 +1010,11 @@ sc_input_manager_process_key(struct sc_input_manager *im,
             }
         }
 
+        return;
+    }
+
+    if (im->social_mode) {
+        sc_social_process_key(im, sdl_keycode, shift, down, repeat);
         return;
     }
 

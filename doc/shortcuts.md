@@ -55,6 +55,8 @@ _<kbd>[Super]</kbd> is typically the <kbd>Windows</kbd> or <kbd>Cmd</kbd> key._
  | Open keyboard settings (HID keyboard only)  | <kbd>MOD</kbd>+<kbd>k</kbd>
  | Enable/disable FPS counter (on stdout)      | <kbd>MOD</kbd>+<kbd>i</kbd>
  | Enable/disable temperature monitor          | <kbd>MOD</kbd>+<kbd>t</kbd>
+ | Toggle Social & Navigation Mode             | <kbd>F10</kbd>
+ | Wake up device & turn screen on             | <kbd>F12</kbd>
  | Pinch-to-zoom/rotate                        | <kbd>Ctrl</kbd>+_click-and-move_
  | Tilt vertically (slide with 2 fingers)      | <kbd>Shift</kbd>+_click-and-move_
  | Tilt horizontally (slide with 2 fingers)    | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+_click-and-move_
@@ -80,3 +82,39 @@ second time. For example, to execute "Expand settings panel":
 
 All <kbd>Ctrl</kbd>+_key_ shortcuts are forwarded to the device, so they are
 handled by the active application.
+
+## Social & Navigation Mode (<kbd>F10</kbd>)
+
+Press <kbd>F10</kbd> to toggle between normal keyboard typing mode and **Social & Navigation Mode** (optimized for TikTok, Instagram Lite, Facebook Lite, Reels, Stories, and general Android navigation).
+
+When active, `[SOCIAL: ON]` is indicated in the window title bar, and the following keys trigger proportional touch gestures and Android commands:
+
+| Key | Action | Gesture / Command |
+|---|---|---|
+| <kbd>↓</kbd> or <kbd>j</kbd> | Next video / Scroll down | Vertical swipe up (`rx=0.50`, `ry: 0.78 → 0.22`) |
+| <kbd>↑</kbd> or <kbd>k</kbd> | Previous video / Scroll up | Vertical swipe down (`rx=0.50`, `ry: 0.22 → 0.78`) |
+| <kbd>Space</kbd> | Pause / Play video | Center tap (`rx=0.50`, `ry=0.50`) |
+| <kbd>→</kbd> or <kbd>d</kbd> | Next story | Tap right side (`rx=0.85`, `ry=0.50`) |
+| <kbd>←</kbd> or <kbd>q</kbd> | Previous story | Tap left side (`rx=0.15`, `ry=0.50`) |
+| <kbd>Shift</kbd>+<kbd>→</kbd> / <kbd>Shift</kbd>+<kbd>d</kbd> | Next story account / category | Horizontal swipe right-to-left |
+| <kbd>Shift</kbd>+<kbd>←</kbd> / <kbd>Shift</kbd>+<kbd>q</kbd> | Previous story account / category | Horizontal swipe left-to-right |
+| <kbd>l</kbd> | Universal Like (TikTok / Reels / Posts) | Double-tap center (`rx=0.50`, `ry=0.50`) |
+| <kbd>f</kbd> | Lateral Like button | Tap icon column (`rx=0.92`, `ry=0.53`) |
+| <kbd>c</kbd> | Open Comments | Tap comments icon (`rx=0.92`, `ry=0.64`) |
+| <kbd>s</kbd> | Share post | Tap share icon (`rx=0.92`, `ry=0.75`) |
+| <kbd>p</kbd> | View creator profile | Tap creator avatar (`rx=0.92`, `ry=0.42`) |
+| <kbd>Shift</kbd>+<kbd>p</kbd> | Open own Profile tab | Tap bottom right navigation bar (`rx=0.90`, `ry=0.94`) |
+| <kbd>m</kbd> | Open Messages / DM | Tap top right icon (`rx=0.91`, `ry=0.07`) |
+| <kbd>Shift</kbd>+<kbd>m</kbd> | Open TikTok Inbox | Tap bottom tab (`rx=0.70`, `ry=0.94`) |
+| <kbd>r</kbd> | Refresh feed (Pull-to-refresh) | Long downward swipe (`ry: 0.20 → 0.82`) |
+| <kbd>a</kbd> | Home Feed tab | Tap bottom left navigation bar (`rx=0.10`, `ry=0.94`) |
+| <kbd>n</kbd> | Expand notification panel | Android notification panel |
+| <kbd>Shift</kbd>+<kbd>n</kbd> | Collapse panels | Android collapse panels |
+| <kbd>u</kbd> | Expand quick settings | Android settings panel |
+| <kbd>Backspace</kbd> / <kbd>Esc</kbd> | Dismiss panel & Android BACK | Collapse panels + BACK key |
+| <kbd>h</kbd> | Android HOME | Android HOME key |
+| <kbd>Tab</kbd> | Android App Switcher | Android APP_SWITCH key |
+| <kbd>PageUp</kbd> | Volume UP | Android VOLUME_UP key |
+| <kbd>PageDown</kbd> | Volume DOWN | Android VOLUME_DOWN key |
+| <kbd>v</kbd> | Native screenshot | Android SYSRQ key |
+

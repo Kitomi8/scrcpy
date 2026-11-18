@@ -546,6 +546,10 @@ sc_screen_update_title(struct sc_screen *screen) {
                         screen->current_temp / 10.0f);
     }
 
+    if (screen->social_mode && len < (int) sizeof(title)) {
+        len += snprintf(title + len, sizeof(title) - len, " [SOCIAL: ON]");
+    }
+
     SDL_SetWindowTitle(screen->window, title);
 }
 
@@ -582,6 +586,7 @@ sc_screen_init(struct sc_screen *screen,
 
     screen->current_fps = UINT32_MAX;
     screen->current_temp = INT32_MIN;
+    screen->social_mode = false;
 
     screen->prevent_auto_resize = false;
 
@@ -1122,6 +1127,14 @@ sc_screen_set_paused(struct sc_screen *screen, bool paused) {
     }
 
     screen->paused = paused;
+}
+
+void
+sc_screen_set_social_mode(struct sc_screen *screen, bool enabled) {
+    if (screen->social_mode != enabled) {
+        screen->social_mode = enabled;
+        sc_screen_update_title(screen);
+    }
 }
 
 void

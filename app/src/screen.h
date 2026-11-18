@@ -56,6 +56,7 @@ struct sc_screen {
     struct sc_temp_monitor temp_monitor;
     uint32_t current_fps;
     int32_t current_temp;
+    bool social_mode;
 
     struct sc_mutex mutex;
     struct sc_frame_buffer fb; // protected by mutex
@@ -204,6 +205,10 @@ sc_screen_set_orientation(struct sc_screen *screen,
 // set the display pause state
 void
 sc_screen_set_paused(struct sc_screen *screen, bool paused);
+
+// set the social mode title indicator state
+void
+sc_screen_set_social_mode(struct sc_screen *screen, bool enabled);
 
 // react to SDL events
 void

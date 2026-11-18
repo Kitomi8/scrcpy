@@ -76,6 +76,14 @@ When your connection drops (e.g. Wi-Fi disconnect, loose cable), scrcpy automati
 scrcpy --auto-reconnect
 ```
 
+### 3.4. Social Media & Navigation Mode (<kbd>F10</kbd>)
+Press <kbd>F10</kbd> to toggle between normal typing mode and dedicated social media navigation (TikTok, Instagram Lite, Facebook Lite, Reels, Stories, etc.). The title bar will display `[SOCIAL: ON]`.
+
+- **Reels & TikTok**: <kbd>↓</kbd> / <kbd>j</kbd> (Next), <kbd>↑</kbd> / <kbd>k</kbd> (Prev), <kbd>Space</kbd> (Pause/Play), <kbd>l</kbd> (Double-tap Like).
+- **Stories**: <kbd>→</kbd> / <kbd>d</kbd> (Next story), <kbd>←</kbd> / <kbd>q</kbd> (Prev story), <kbd>Shift</kbd>+<kbd>→</kbd> / <kbd>Shift</kbd>+<kbd>←</kbd> (Next/Prev account).
+- **Interactions**: <kbd>f</kbd> (Like icon), <kbd>c</kbd> (Comments), <kbd>s</kbd> (Share), <kbd>p</kbd> (Creator profile), <kbd>Shift</kbd>+<kbd>p</kbd> (My profile), <kbd>m</kbd> (DMs), <kbd>Shift</kbd>+<kbd>m</kbd> (TikTok Inbox), <kbd>r</kbd> (Pull-to-refresh), <kbd>a</kbd> (Home feed).
+- **System controls**: <kbd>n</kbd> / <kbd>Shift</kbd>+<kbd>n</kbd> (Notifications), <kbd>u</kbd> (Quick Settings), <kbd>Backspace</kbd> / <kbd>Esc</kbd> (Back & dismiss), <kbd>h</kbd> (Home), <kbd>Tab</kbd> (App Switcher), <kbd>PageUp</kbd> / <kbd>PageDown</kbd> (Volume), <kbd>v</kbd> (Screenshot).
+
 ---
 
 ## 4. Connection & Wireless (TCP/IP)
@@ -263,6 +271,8 @@ The default modifier key (<kbd>MOD</kbd>) on Windows is **(Left) <kbd>Alt</kbd>*
 | Shortcut | Action |
 |---|---|
 | <kbd>Esc</kbd> | **Android BACK** |
+| <kbd>F10</kbd> | **Toggle Social & Navigation Mode** (TikTok, Reels, Stories) |
+| <kbd>F12</kbd> | **Wake up device & turn screen on** |
 | <kbd>MOD</kbd>+<kbd>t</kbd> | **Toggle Phone Temperature in Title Bar** |
 | <kbd>MOD</kbd>+<kbd>f</kbd> or <kbd>F11</kbd> | Toggle Fullscreen |
 | <kbd>MOD</kbd>+<kbd>h</kbd> | Android HOME |
