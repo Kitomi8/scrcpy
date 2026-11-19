@@ -239,6 +239,11 @@ struct sc_point
 sc_screen_convert_window_to_frame_coords(struct sc_screen *screen,
                                         int32_t x, int32_t y);
 
+// convert visual relative coordinates (rx, ry in [0.0, 1.0]) to frame coordinates
+struct sc_point
+sc_screen_convert_relative_to_frame_coords(struct sc_screen *screen,
+                                           float rx, float ry);
+
 static inline enum AVHWDeviceType
 sc_screen_get_hw_type(struct sc_screen *screen) {
     return sc_texture_get_hw_type(&screen->tex);

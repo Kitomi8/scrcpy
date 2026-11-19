@@ -126,6 +126,11 @@ sc_process_execute_p(const char *const argv[], HANDLE *handle, unsigned flags,
     }
 
     assert(argv && *argv);
+    if (!argv || !*argv || !**argv) {
+        LOGE("Cannot execute command: command line is empty");
+        ret = SC_PROCESS_ERROR_MISSING_BINARY;
+        goto error_free_attribute_list;
+    }
     char *cmd = sc_command_serialize_windows(argv);
     if (!cmd) {
         LOG_OOM();

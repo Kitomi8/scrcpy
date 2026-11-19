@@ -447,58 +447,15 @@ sc_social_jitter(int32_t val, int32_t max_val) {
 }
 
 static struct sc_point
-sc_social_get_point(struct sc_screen *screen, float rx, float ry) {
-    int32_t w = screen->content_size.width;
-    int32_t h = screen->content_size.height;
-    if (!w || !h) {
-        w = screen->frame_size.width;
-        h = screen->frame_size.height;
-    }
+sc_social_get_point(struct sc_input_manager *im, float rx, float ry) {
+    struct sc_point pt =
+        sc_screen_convert_relative_to_frame_coords(im->screen, rx, ry);
 
-    int32_t x = sc_social_jitter((int32_t) (rx * w), w);
-    int32_t y = sc_social_jitter((int32_t) (ry * h), h);
+    struct sc_size frame_size = im->screen->frame_size;
+    pt.x = sc_social_jitter(pt.x, frame_size.width);
+    pt.y = sc_social_jitter(pt.y, frame_size.height);
 
-    enum sc_orientation orientation = screen->orientation;
-    struct sc_point result;
-    switch (orientation) {
-        case SC_ORIENTATION_0:
-            result.x = x;
-            result.y = y;
-            break;
-        case SC_ORIENTATION_90:
-            result.x = y;
-            result.y = w - x;
-            break;
-        case SC_ORIENTATION_180:
-            result.x = w - x;
-            result.y = h - y;
-            break;
-        case SC_ORIENTATION_270:
-            result.x = h - y;
-            result.y = x;
-            break;
-        case SC_ORIENTATION_FLIP_0:
-            result.x = w - x;
-            result.y = y;
-            break;
-        case SC_ORIENTATION_FLIP_90:
-            result.x = y;
-            result.y = x;
-            break;
-        case SC_ORIENTATION_FLIP_180:
-            result.x = x;
-            result.y = h - y;
-            break;
-        case SC_ORIENTATION_FLIP_270:
-            result.x = h - y;
-            result.y = w - x;
-            break;
-        default:
-            result.x = x;
-            result.y = y;
-            break;
-    }
-    return result;
+    return pt;
 }
 
 static bool
@@ -527,7 +484,7 @@ sc_social_tap(struct sc_input_manager *im, float rx, float ry) {
         return;
     }
 
-    struct sc_point pt = sc_social_get_point(im->screen, rx, ry);
+    struct sc_point pt = sc_social_get_point(im, rx, ry);
     sc_social_send_touch(im, AMOTION_EVENT_ACTION_DOWN, pt, 1.0f);
     SDL_Delay(25);
     sc_social_send_touch(im, AMOTION_EVENT_ACTION_UP, pt, 0.0f);
@@ -549,8 +506,8 @@ sc_social_swipe(struct sc_input_manager *im, float rx1, float ry1, float rx2, fl
         return;
     }
 
-    struct sc_point start_pt = sc_social_get_point(im->screen, rx1, ry1);
-    struct sc_point end_pt = sc_social_get_point(im->screen, rx2, ry2);
+    struct sc_point start_pt = sc_social_get_point(im, rx1, ry1);
+    struct sc_point end_pt = sc_social_get_point(im, rx2, ry2);
 
     sc_social_send_touch(im, AMOTION_EVENT_ACTION_DOWN, start_pt, 1.0f);
     SDL_Delay(12);
@@ -570,14 +527,21 @@ sc_social_swipe(struct sc_input_manager *im, float rx1, float ry1, float rx2, fl
 
 static void
 sc_social_process_key(struct sc_input_manager *im, SDL_Keycode key,
-                      bool shift, bool down, bool repeat) {
+                      uint16_t mod, bool down, bool repeat) {
     if (!im->controller || im->screen->paused || im->disconnected || im->camera) {
+        return;
+    }
+
+    bool alt = mod & SDL_KMOD_ALT;
+    if (alt || sc_shortcut_mods_is_shortcut_mod(im->sdl_shortcut_mods, mod)) {
         return;
     }
 
     if (!down || repeat) {
         return;
     }
+
+    bool shift = mod & SDL_KMOD_SHIFT;
 
     switch (key) {
         // A. Short Videos Navigation (TikTok / Reels / Shorts) & Scrolling
@@ -1014,7 +978,7 @@ sc_input_manager_process_key(struct sc_input_manager *im,
     }
 
     if (im->social_mode) {
-        sc_social_process_key(im, sdl_keycode, shift, down, repeat);
+        sc_social_process_key(im, sdl_keycode, mod, down, repeat);
         return;
     }
 

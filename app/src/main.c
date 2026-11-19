@@ -7,6 +7,7 @@
 #endif
 #include <SDL3/SDL.h>
 
+#include "adb/adb.h"
 #include "cli.h"
 #include "events.h"
 #include "options.h"
@@ -87,12 +88,17 @@ main_scrcpy(int argc, char *argv[]) {
         goto end;
     }
 
+    if (!sc_adb_init()) {
+        ret = SCRCPY_EXIT_FAILURE;
+        goto net_cleanup;
+    }
+
     sc_log_configure();
 
     do {
         if (!sc_main_thread_init()) {
             ret = SCRCPY_EXIT_FAILURE;
-            goto net_cleanup;
+            goto adb_cleanup;
         }
 
 #ifdef HAVE_USB
@@ -108,6 +114,9 @@ main_scrcpy(int argc, char *argv[]) {
             SDL_Delay(2000);
         }
     } while (ret == SCRCPY_EXIT_DISCONNECTED && args.opts.auto_reconnect);
+
+adb_cleanup:
+    sc_adb_destroy();
 
 net_cleanup:
     net_cleanup();

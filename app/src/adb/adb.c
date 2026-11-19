@@ -27,12 +27,22 @@
 #define SC_ADB_COMMAND(...) { sc_adb_get_executable(), __VA_ARGS__, NULL }
 
 static char *adb_executable;
+static unsigned adb_refcount = 0;
 
 bool
 sc_adb_init(void) {
+    if (adb_refcount > 0 && adb_executable && *adb_executable) {
+        ++adb_refcount;
+        return true;
+    }
+
+    free(adb_executable);
+    adb_executable = NULL;
+
     adb_executable = sc_get_env("ADB");
     if (adb_executable) {
         LOGD("Using adb: %s", adb_executable);
+        adb_refcount = 1;
         return true;
     }
 
@@ -40,6 +50,7 @@ sc_adb_init(void) {
     adb_executable = strdup("adb");
     if (!adb_executable) {
         LOG_OOM();
+        adb_refcount = 0;
         return false;
     }
 #else
@@ -49,24 +60,36 @@ sc_adb_init(void) {
     adb_executable = sc_file_get_local_path("adb");
     if (!adb_executable) {
         // Error already logged
+        adb_refcount = 0;
         return false;
     }
 
     LOGD("Using adb (portable): %s", adb_executable);
 #endif
 
+    adb_refcount = 1;
     return true;
 }
 
 void
 sc_adb_destroy(void) {
+    if (adb_refcount > 1) {
+        --adb_refcount;
+        return;
+    }
     free(adb_executable);
     adb_executable = NULL;
+    adb_refcount = 0;
 }
 
 const char *
 sc_adb_get_executable(void) {
-    return adb_executable;
+    if (!adb_executable || !*adb_executable) {
+        if (!sc_adb_init()) {
+            return "adb";
+        }
+    }
+    return (adb_executable && *adb_executable) ? adb_executable : "adb";
 }
 
 // serialize argv to string "[arg1], [arg2], [arg3]"
@@ -204,6 +227,11 @@ process_check_success_intr(struct sc_intr *intr, sc_pid pid, const char *name,
 
 static sc_pid
 sc_adb_execute_p(const char *const argv[], unsigned flags, sc_pipe *pout) {
+    if (!argv || !*argv || !**argv) {
+        LOGE("Cannot execute adb: executable path is missing or empty");
+        return SC_PROCESS_NONE;
+    }
+
     unsigned process_flags = 0;
     if (flags & SC_ADB_NO_STDOUT) {
         process_flags |= SC_PROCESS_NO_STDOUT;

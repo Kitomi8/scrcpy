@@ -384,9 +384,14 @@ scrcpy(struct scrcpy_options *options) {
 #endif
     struct scrcpy *s = &scrcpy;
 
+    if (!sc_adb_init()) {
+        return SCRCPY_EXIT_FAILURE;
+    }
+
     // Minimal SDL initialization
     if (!SDL_Init(SDL_INIT_EVENTS)) {
         LOGE("Could not initialize SDL: %s", SDL_GetError());
+        sc_adb_destroy();
         return SCRCPY_EXIT_FAILURE;
     }
 
@@ -448,6 +453,7 @@ scrcpy(struct scrcpy_options *options) {
         if (!SDL_Init(SDL_INIT_VIDEO)) {
             if (options->video_playback) {
                 LOGE("Could not initialize SDL video: %s", SDL_GetError());
+                sc_adb_destroy();
                 return SCRCPY_EXIT_FAILURE;
             } else {
                 LOGW("Could not initialize SDL video: %s", SDL_GetError());
@@ -458,6 +464,7 @@ scrcpy(struct scrcpy_options *options) {
     if (options->audio_playback) {
         if (!SDL_Init(SDL_INIT_AUDIO)) {
             LOGE("Could not initialize SDL audio: %s", SDL_GetError());
+            sc_adb_destroy();
             return SCRCPY_EXIT_FAILURE;
         }
     }
@@ -465,6 +472,7 @@ scrcpy(struct scrcpy_options *options) {
     if (options->gamepad_input_mode != SC_GAMEPAD_INPUT_MODE_DISABLED) {
         if (!SDL_Init(SDL_INIT_GAMEPAD)) {
             LOGE("Could not initialize SDL gamepad: %s", SDL_GetError());
+            sc_adb_destroy();
             return SCRCPY_EXIT_FAILURE;
         }
     }
@@ -1282,6 +1290,8 @@ end:
 
     sc_server_destroy(&s->server);
 
+    sc_adb_destroy();
+
     return ret;
 
 wait_reconnect:
@@ -1456,6 +1466,7 @@ wait_reconnect:
             sc_screen_hide_window(&s->screen);
             sc_screen_join(&s->screen);
             sc_screen_destroy(&s->screen);
+            sc_adb_destroy();
             return ret;
         }
 

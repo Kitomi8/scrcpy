@@ -1475,6 +1475,77 @@ sc_screen_convert_window_to_frame_coords(struct sc_screen *screen,
     return result;
 }
 
+struct sc_point
+sc_screen_convert_relative_to_frame_coords(struct sc_screen *screen,
+                                           float rx, float ry) {
+    if (rx < 0.0f) {
+        rx = 0.0f;
+    } else if (rx > 1.0f) {
+        rx = 1.0f;
+    }
+    if (ry < 0.0f) {
+        ry = 0.0f;
+    } else if (ry > 1.0f) {
+        ry = 1.0f;
+    }
+
+    struct sc_size frame_size = screen->frame_size;
+    if (!screen->video || screen->rect.w <= 0.0f || screen->rect.h <= 0.0f ||
+            frame_size.width <= 0 || frame_size.height <= 0) {
+        int32_t fx = 0;
+        int32_t fy = 0;
+        if (frame_size.width > 0) {
+            fx = (int32_t) (rx * (frame_size.width - 1));
+            if (fx < 0) {
+                fx = 0;
+            } else if (fx >= frame_size.width) {
+                fx = frame_size.width - 1;
+            }
+        }
+        if (frame_size.height > 0) {
+            fy = (int32_t) (ry * (frame_size.height - 1));
+            if (fy < 0) {
+                fy = 0;
+            } else if (fy >= frame_size.height) {
+                fy = frame_size.height - 1;
+            }
+        }
+        return (struct sc_point) { fx, fy };
+    }
+
+    // HiDPI handling: both screen->rect and sc_screen_convert_window_to_frame_coords
+    // operate in the SDL window coordinates space (SDL_GetWindowSize).
+    int win_w = 0, win_h = 0;
+    int pix_w = 0, pix_h = 0;
+    if (screen->window) {
+        SDL_GetWindowSize(screen->window, &win_w, &win_h);
+        SDL_GetWindowSizeInPixels(screen->window, &pix_w, &pix_h);
+    }
+    (void) win_w; (void) win_h; (void) pix_w; (void) pix_h;
+
+    float px = screen->rect.x + rx * screen->rect.w;
+    float py = screen->rect.y + ry * screen->rect.h;
+
+    int32_t wx = (int32_t) (px + 0.5f);
+    int32_t wy = (int32_t) (py + 0.5f);
+
+    struct sc_point p = sc_screen_convert_window_to_frame_coords(screen, wx, wy);
+
+    if (p.x < 0) {
+        p.x = 0;
+    } else if (p.x >= frame_size.width) {
+        p.x = frame_size.width - 1;
+    }
+
+    if (p.y < 0) {
+        p.y = 0;
+    } else if (p.y >= frame_size.height) {
+        p.y = frame_size.height - 1;
+    }
+
+    return p;
+}
+
 void
 sc_screen_set_disconnected_icon(struct sc_screen *screen, SDL_Surface *icon) {
     if (sc_screen_set_texture_from_surface(screen, icon)) {
