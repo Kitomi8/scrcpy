@@ -330,11 +330,48 @@ static void test_parse_temperature(void) {
     assert(!ok);
 }
 
+static void test_parse_battery(void) {
+    const char dumpsys_battery[] =
+        "Current Battery Service state:\n"
+        "  AC powered: false\n"
+        "  USB powered: true\n"
+        "  level: 85\n"
+        "  voltage: 4123\n"
+        "  temperature: 312\n"
+        "  technology: Li-poly\n";
+
+    struct sc_battery_info info;
+    bool ok = sc_adb_parse_battery(dumpsys_battery, &info);
+    assert(ok);
+    assert(info.temp == 312); // 31.2°C
+    assert(info.level == 85);
+    assert(info.charging);
+
+    const char dumpsys_battery_discharging[] =
+        "Current Battery Service state:\n"
+        "  AC powered: false\n"
+        "  USB powered: false\n"
+        "  Wireless powered: false\n"
+        "  status: 3\n"
+        "  level: 42\n"
+        "  temperature: 280\n";
+
+    ok = sc_adb_parse_battery(dumpsys_battery_discharging, &info);
+    assert(ok);
+    assert(info.temp == 280);
+    assert(info.level == 42);
+    assert(!info.charging);
+
+    assert(!sc_adb_parse_battery(NULL, &info));
+    assert(!sc_adb_parse_battery("invalid", &info));
+}
+
 int main(int argc, char *argv[]) {
     (void) argc;
     (void) argv;
 
     test_parse_temperature();
+    test_parse_battery();
     test_adb_devices();
     test_adb_devices_cr();
     test_adb_devices_daemon_start();

@@ -56,7 +56,20 @@ struct sc_screen {
     struct sc_temp_monitor temp_monitor;
     uint32_t current_fps;
     int32_t current_temp;
+    int32_t current_battery_level;
+    bool battery_charging;
+    bool battery_80_alert_emitted;
+    bool overheat_alert_emitted;
     bool social_mode;
+    const char *social_profile_name;
+    bool muted;
+    bool recording;
+    bool mini_player;
+    int saved_win_x;
+    int saved_win_y;
+    int saved_win_w;
+    int saved_win_h;
+    size_t opacity_index;
 
     struct sc_mutex mutex;
     struct sc_frame_buffer fb; // protected by mutex
@@ -130,6 +143,7 @@ struct sc_screen_params {
     struct sc_key_processor *kp;
     struct sc_mouse_processor *mp;
     struct sc_gamepad_processor *gp;
+    struct sc_audio_player *ap;
 
     struct sc_mouse_bindings mouse_bindings;
     bool legacy_paste;
@@ -243,6 +257,24 @@ sc_screen_convert_window_to_frame_coords(struct sc_screen *screen,
 struct sc_point
 sc_screen_convert_relative_to_frame_coords(struct sc_screen *screen,
                                            float rx, float ry);
+
+void
+sc_screen_set_muted(struct sc_screen *screen, bool muted);
+
+void
+sc_screen_set_recording(struct sc_screen *screen, bool recording);
+
+void
+sc_screen_set_social_profile_name(struct sc_screen *screen, const char *name);
+
+void
+sc_screen_cycle_opacity(struct sc_screen *screen);
+
+void
+sc_screen_toggle_mini_player(struct sc_screen *screen);
+
+bool
+sc_screen_capture_screenshot(struct sc_screen *screen);
 
 static inline enum AVHWDeviceType
 sc_screen_get_hw_type(struct sc_screen *screen) {

@@ -81,13 +81,37 @@ To disable this behavior and immediately exit on disconnection:
 scrcpy --no-auto-reconnect
 ```
 
-### 3.4. Social Media & Navigation Mode (<kbd>F10</kbd>)
-Press <kbd>F10</kbd> to toggle between normal typing mode and dedicated social media navigation (TikTok, Instagram Lite, Facebook Lite, Reels, Stories, etc.). The title bar will display `[SOCIAL: ON]`.
+### 3.4. Thermal Protection & Battery Telemetry
+Scrcpy now integrates advanced thermal and battery health telemetry directly into the window title:
+`NomAppareil [60 FPS | 35°C | 82%] [SOCIAL: TIKTOK] [REC] [MUTED] [HOT] [CHARGE >= 80%]`
+
+- **Real-Time Battery Telemetry**: Shows device battery percentage and charging state automatically.
+- **Battery Preservation Alert (`[CHARGE >= 80%]`)**: When the device is charging and reaches 80% or more, a prominent badge is shown in the title bar alongside a console notice to remind you to disconnect the cable or switch to Wi-Fi to avoid premature battery degradation.
+- **Automatic Anti-Overheat Protection (`[HOT]`)**: If the device temperature reaches or exceeds **42.0°C**, scrcpy displays `[HOT]` and automatically sends a power-saving command to turn off the physical screen (while mirroring remains active and responsive on PC), quickly bringing temperatures back to safe operational limits.
+
+### 3.5. Social Media Mode with Switchable INI Profiles (<kbd>F10</kbd>, <kbd>F9</kbd>, <kbd>Shift</kbd>+<kbd>F9</kbd>)
+Press <kbd>F10</kbd> to toggle between normal keyboard typing mode and dedicated social media navigation.
+- **Switch Profiles (<kbd>F9</kbd>)**: Instantly switch between `[TIKTOK]`, `[IG_LITE]`, `[FB_LITE]`, and `[YOUTUBE]` profiles. The active profile name is shown in the title bar (e.g. `[SOCIAL: TIKTOK]`).
+- **Hot-Reload (<kbd>Shift</kbd>+<kbd>F9</kbd>)**: Edit coordinate ratios in `scrcpy_social.ini` and press <kbd>Shift</kbd>+<kbd>F9</kbd> to reload them live without restarting.
+- **Asynchronous Gestures**: Swipes and taps run on a dedicated background worker thread, guaranteeing smooth 60 FPS video without micro-stutters during swipe sequences.
 
 - **Reels & TikTok**: <kbd>↓</kbd> / <kbd>j</kbd> (Next), <kbd>↑</kbd> / <kbd>k</kbd> (Prev), <kbd>Space</kbd> (Pause/Play), <kbd>l</kbd> (Double-tap Like).
 - **Stories**: <kbd>→</kbd> / <kbd>d</kbd> (Next story), <kbd>←</kbd> / <kbd>q</kbd> (Prev story), <kbd>Shift</kbd>+<kbd>→</kbd> / <kbd>Shift</kbd>+<kbd>←</kbd> (Next/Prev account).
 - **Interactions**: <kbd>e</kbd> / <kbd>Shift</kbd>+<kbd>e</kbd> (Insert emoji / Heart reaction), <kbd>f</kbd> (Like icon), <kbd>c</kbd> (Comments), <kbd>s</kbd> (Share), <kbd>p</kbd> (Creator profile), <kbd>Shift</kbd>+<kbd>p</kbd> (My profile), <kbd>m</kbd> (DMs), <kbd>Shift</kbd>+<kbd>m</kbd> (TikTok Inbox), <kbd>r</kbd> (Pull-to-refresh), <kbd>a</kbd> (Home feed).
 - **System controls**: <kbd>n</kbd> / <kbd>Shift</kbd>+<kbd>n</kbd> (Notifications), <kbd>u</kbd> (Quick Settings), <kbd>Backspace</kbd> / <kbd>Esc</kbd> (Back & dismiss), <kbd>h</kbd> (Home), <kbd>Tab</kbd> (App Switcher), <kbd>PageUp</kbd> / <kbd>PageDown</kbd> (Volume), <kbd>v</kbd> (Screenshot).
+
+### 3.6. Multimedia & Desktop Controls
+- **Audio Mute (<kbd>F8</kbd>)**: Instantly silence or restore audio output. Displays `[MUTED]` in the title bar when active.
+- **Desktop Screenshot (<kbd>MOD</kbd>+<kbd>y</kbd>)**: Encodes the currently displayed frame to high-quality PNG in the `captures/` folder (`captures/scrcpy_YYYYMMDD_HHMMSS.png`).
+- **On-the-Fly MP4 Recording (<kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>r</kbd>)**: Start and stop recording the session without restarting scrcpy. Starts cleanly on the next video IDR keyframe and saves to `captures/scrcpy_rec_YYYYMMDD_HHMMSS.mp4` with a `[REC]` title badge.
+- **Window Opacity (<kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>o</kbd>)**: Cycle transparency levels: `100%` → `85%` → `70%` → `50%`.
+- **Mini-Player Sticky Mode (<kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>m</kbd>)**: Shrinks the window into a compact picture-in-picture player (~320px width) locked always-on-top.
+
+### 3.7. Mouse Ergonomics & USB to Wi-Fi Hot-Switch
+- **Mouse Side Buttons**: Button <kbd>X1</kbd> (Back) navigates back; Button <kbd>X2</kbd> (Forward) opens the App Switcher.
+- **Mouse Wheel Volume**: Hold <kbd>MOD</kbd> (<kbd>Alt</kbd>) and scroll the mouse wheel to raise or lower Android volume.
+- **USB to Wi-Fi Hot-Switch (<kbd>MOD</kbd>+<kbd>w</kbd>)**: Automatically detects device Wi-Fi IP, configures `adb tcpip 5555`, and connects asynchronously. You can then immediately unplug the USB cable and continue without interruption.
+- **Desktop System Tray**: Right-click the scrcpy tray icon in your Windows taskbar to wake the screen (<kbd>F12</kbd>), toggle Social mode (<kbd>F10</kbd>), cycle profiles (<kbd>F9</kbd>), mute audio (<kbd>F8</kbd>), toggle recording, or quit.
 
 ---
 
@@ -275,11 +299,19 @@ The default modifier key (<kbd>MOD</kbd>) on Windows is **(Left) <kbd>Alt</kbd>*
 
 | Shortcut | Action |
 |---|---|
-| <kbd>Esc</kbd> | **Android BACK** |
-| <kbd>F9</kbd> or <kbd>MOD</kbd>+<kbd>e</kbd> | **Insert Emoji** (cycles: 😂, ❤️, 🔥, 👍, 😍, 😭, ✨, 👏, 🙏, 🎉...) |
-| <kbd>Shift</kbd>+<kbd>F9</kbd> or <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>e</kbd> | **Insert Heart Emoji (❤️)** |
+| <kbd>Esc</kbd> \| Mouse <kbd>X1</kbd> | **Android BACK** |
+| Mouse <kbd>X2</kbd> | **Android APP_SWITCH** (Recent Apps) |
+| <kbd>F8</kbd> | **Mute / Unmute Audio** (silence output with `[MUTED]` badge) |
+| <kbd>F9</kbd> | **Switch Social Profile** (`TIKTOK`, `IG_LITE`, `FB_LITE`, `YOUTUBE`) |
+| <kbd>Shift</kbd>+<kbd>F9</kbd> | **Hot-Reload scrcpy_social.ini** without restarting |
 | <kbd>F10</kbd> | **Toggle Social & Navigation Mode** (TikTok, Reels, Stories) |
 | <kbd>F12</kbd> | **Wake up device & turn screen on** |
+| <kbd>MOD</kbd>+<kbd>y</kbd> | **Take Desktop Screenshot** (PNG saved in `captures/`) |
+| <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>r</kbd> | **Toggle On-the-Fly MP4 Recording** (saved in `captures/`) |
+| <kbd>MOD</kbd>+<kbd>w</kbd> | **Hot Switch USB to Wi-Fi** (connects `adb tcpip 5555` wirelessly) |
+| <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>o</kbd> | **Cycle Window Opacity** (100% → 85% → 70% → 50%) |
+| <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>m</kbd> | **Toggle Mini-Player Sticky Mode** (~320px width, always-on-top) |
+| <kbd>MOD</kbd>+<kbd>Wheel Up</kbd> / <kbd>Down</kbd> | **Volume UP / Volume DOWN** via mouse wheel |
 | <kbd>MOD</kbd>+<kbd>t</kbd> | **Toggle Phone Temperature in Title Bar** |
 | <kbd>MOD</kbd>+<kbd>f</kbd> or <kbd>F11</kbd> | Toggle Fullscreen |
 | <kbd>MOD</kbd>+<kbd>h</kbd> | Android HOME |
@@ -292,6 +324,7 @@ The default modifier key (<kbd>MOD</kbd>) on Windows is **(Left) <kbd>Alt</kbd>*
 | <kbd>MOD</kbd>+<kbd>Down</kbd> | Volume DOWN |
 | <kbd>MOD</kbd>+<kbd>r</kbd> | Rotate device display |
 | <kbd>MOD</kbd>+<kbd>Left</kbd> / <kbd>MOD</kbd>+<kbd>Right</kbd> | Rotate mirror window left / right |
+| <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>w</kbd> | Resize window to remove black borders |
 | <kbd>MOD</kbd>+<kbd>n</kbd> | Expand notification panel |
 | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>n</kbd> | Collapse notification panel |
 | <kbd>MOD</kbd>+<kbd>c</kbd> | Copy device clipboard to PC |

@@ -3,6 +3,14 @@
 #include <assert.h>
 #include <inttypes.h>
 #include <string.h>
+#include <time.h>
+#include <sys/stat.h>
+#ifdef _WIN32
+# include <direct.h>
+# define sc_mkdir(path) _mkdir(path)
+#else
+# define sc_mkdir(path) mkdir(path, 0755)
+#endif
 #include <SDL3/SDL.h>
 
 #include "events.h"
@@ -515,6 +523,8 @@ sc_screen_frame_sink_push_session(struct sc_frame_sink *sink,
     return SC_SINK_OK;
 }
 
+#define SC_OVERHEAT_TEMP_THRESHOLD 420
+
 static void
 sc_screen_fps_callback(uint32_t fps, void *userdata) {
     (void) userdata;
@@ -522,9 +532,13 @@ sc_screen_fps_callback(uint32_t fps, void *userdata) {
 }
 
 static void
-sc_screen_temp_callback(int32_t temp, void *userdata) {
+sc_screen_temp_callback(const struct sc_battery_info *info, void *userdata) {
     (void) userdata;
-    sc_push_event_with_data(SC_EVENT_SCREEN_TEMPERATURE, (void *) (intptr_t) temp);
+    struct sc_battery_info *copy = malloc(sizeof(*copy));
+    if (copy) {
+        *copy = *info;
+        sc_push_event_with_data(SC_EVENT_SCREEN_BATTERY, copy);
+    }
 }
 
 static void
@@ -542,18 +556,64 @@ sc_screen_update_title(struct sc_screen *screen) {
         return;
     }
 
-    if (screen->current_fps != UINT32_MAX && len < (int) sizeof(title)) {
-        len += snprintf(title + len, sizeof(title) - len, " [%" PRIu32 " FPS]",
-                        screen->current_fps);
-    }
+    // Telemetry badge: [FPS | Temp | Battery]
+    bool has_fps = screen->current_fps != UINT32_MAX;
+    bool has_temp = screen->current_temp != INT32_MIN;
+    bool has_battery = screen->current_battery_level >= 0;
 
-    if (screen->current_temp != INT32_MIN && len < (int) sizeof(title)) {
-        len += snprintf(title + len, sizeof(title) - len, " [%.1f°C]",
-                        screen->current_temp / 10.0f);
+    if (has_fps || has_temp || has_battery) {
+        len += snprintf(title + len, sizeof(title) - len, " [");
+        bool need_sep = false;
+        if (has_fps) {
+            len += snprintf(title + len, sizeof(title) - len, "%" PRIu32 " FPS",
+                            screen->current_fps);
+            need_sep = true;
+        }
+        if (has_temp) {
+            if (need_sep) {
+                len += snprintf(title + len, sizeof(title) - len, " | ");
+            }
+            if (screen->current_temp % 10 == 0) {
+                len += snprintf(title + len, sizeof(title) - len, "%" PRId32 "°C",
+                                screen->current_temp / 10);
+            } else {
+                len += snprintf(title + len, sizeof(title) - len, "%.1f°C",
+                                screen->current_temp / 10.0f);
+            }
+            need_sep = true;
+        }
+        if (has_battery) {
+            if (need_sep) {
+                len += snprintf(title + len, sizeof(title) - len, " | ");
+            }
+            len += snprintf(title + len, sizeof(title) - len, "%" PRId32 "%%",
+                            screen->current_battery_level);
+        }
+        len += snprintf(title + len, sizeof(title) - len, "]");
     }
 
     if (screen->social_mode && len < (int) sizeof(title)) {
-        len += snprintf(title + len, sizeof(title) - len, " [SOCIAL: ON]");
+        const char *pname = screen->social_profile_name ?
+                            screen->social_profile_name : "TIKTOK";
+        len += snprintf(title + len, sizeof(title) - len, " [SOCIAL: %s]", pname);
+    }
+
+    if (screen->recording && len < (int) sizeof(title)) {
+        len += snprintf(title + len, sizeof(title) - len, " [REC]");
+    }
+
+    if (screen->muted && len < (int) sizeof(title)) {
+        len += snprintf(title + len, sizeof(title) - len, " [MUTED]");
+    }
+
+    if (screen->current_temp != INT32_MIN && screen->current_temp >= SC_OVERHEAT_TEMP_THRESHOLD &&
+            len < (int) sizeof(title)) {
+        len += snprintf(title + len, sizeof(title) - len, " [HOT]");
+    }
+
+    if (screen->battery_charging && screen->current_battery_level >= 80 &&
+            len < (int) sizeof(title)) {
+        len += snprintf(title + len, sizeof(title) - len, " [CHARGE >= 80%%]");
     }
 
     SDL_SetWindowTitle(screen->window, title);
@@ -592,7 +652,20 @@ sc_screen_init(struct sc_screen *screen,
 
     screen->current_fps = UINT32_MAX;
     screen->current_temp = INT32_MIN;
+    screen->current_battery_level = -1;
+    screen->battery_charging = false;
+    screen->battery_80_alert_emitted = false;
+    screen->overheat_alert_emitted = false;
     screen->social_mode = false;
+    screen->social_profile_name = "TIKTOK";
+    screen->muted = false;
+    screen->recording = false;
+    screen->mini_player = false;
+    screen->saved_win_x = 0;
+    screen->saved_win_y = 0;
+    screen->saved_win_w = 0;
+    screen->saved_win_h = 0;
+    screen->opacity_index = 0;
 
     screen->prevent_auto_resize = false;
 
@@ -763,6 +836,8 @@ sc_screen_init(struct sc_screen *screen,
         .kp = params->kp,
         .mp = params->mp,
         .gp = params->gp,
+        .ap = params->ap,
+        .serial = params->serial,
         .camera = params->camera,
         .mouse_bindings = params->mouse_bindings,
         .legacy_paste = params->legacy_paste,
@@ -896,6 +971,7 @@ sc_screen_hide_window(struct sc_screen *screen) {
 
 void
 sc_screen_interrupt(struct sc_screen *screen) {
+    sc_input_manager_interrupt(&screen->im);
     sc_fps_counter_interrupt(&screen->fps_counter);
     sc_temp_monitor_interrupt(&screen->temp_monitor);
 }
@@ -909,6 +985,7 @@ sc_screen_interrupt_disconnect(struct sc_screen *screen) {
 
 void
 sc_screen_join(struct sc_screen *screen) {
+    sc_input_manager_join(&screen->im);
     sc_fps_counter_join(&screen->fps_counter);
     sc_temp_monitor_join(&screen->temp_monitor);
     if (screen->disconnect_started) {
@@ -921,6 +998,7 @@ sc_screen_destroy(struct sc_screen *screen) {
 #ifndef NDEBUG
     assert(!screen->open);
 #endif
+    sc_input_manager_destroy(&screen->im);
     if (screen->disconnect_started) {
         sc_disconnect_destroy(&screen->disconnect);
     }
@@ -944,6 +1022,10 @@ sc_screen_destroy(struct sc_screen *screen) {
     }
     while (sc_dequeue_event(SC_EVENT_SCREEN_TEMPERATURE, &event)) {
         // Drain any pending temperature events
+    }
+    while (sc_dequeue_event(SC_EVENT_SCREEN_BATTERY, &event)) {
+        // Drain any pending battery events
+        free(event.user.data1);
     }
     bool has_event =
         sc_dequeue_event(SC_EVENT_DISCONNECTED_ICON_LOADED, &event);
@@ -1333,6 +1415,46 @@ sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event) {
             sc_screen_update_title(screen);
             return;
         }
+        case SC_EVENT_SCREEN_BATTERY: {
+            struct sc_battery_info *info = event->user.data1;
+            if (info) {
+                screen->current_temp = info->temp;
+                screen->current_battery_level = info->level;
+                screen->battery_charging = info->charging;
+                free(info);
+            }
+
+            // Battery preservation alert (>= 80% when charging)
+            if (screen->battery_charging && screen->current_battery_level >= 80) {
+                if (!screen->battery_80_alert_emitted) {
+                    LOGW("Battery preservation alert: level is %" PRId32 "%% while charging! Disconnect cable to preserve battery life.", screen->current_battery_level);
+                    screen->battery_80_alert_emitted = true;
+                }
+            } else if (screen->current_battery_level < 80 || !screen->battery_charging) {
+                screen->battery_80_alert_emitted = false;
+            }
+
+            // Anti-overheat thermal protection (>= 42.0°C)
+            if (screen->current_temp != INT32_MIN && screen->current_temp >= SC_OVERHEAT_TEMP_THRESHOLD) {
+                if (!screen->overheat_alert_emitted) {
+                    LOGW("Thermal protection: device temperature reached %.1f°C (>= 42.0°C)! Automatically turning off physical display to limit heating.", screen->current_temp / 10.0f);
+                    screen->overheat_alert_emitted = true;
+                    if (screen->controller) {
+                        struct sc_control_msg msg;
+                        msg.type = SC_CONTROL_MSG_TYPE_SET_DISPLAY_POWER;
+                        msg.set_display_power.on = false;
+                        if (!sc_controller_push_msg(screen->controller, &msg)) {
+                            LOGW("Could not send display off control message for anti-overheat");
+                        }
+                    }
+                }
+            } else if (screen->current_temp != INT32_MIN && screen->current_temp < SC_OVERHEAT_TEMP_THRESHOLD) {
+                screen->overheat_alert_emitted = false;
+            }
+
+            sc_screen_update_title(screen);
+            return;
+        }
         case SC_EVENT_DEVICE_DISCONNECTED:
             assert(!screen->disconnected);
             screen->disconnected = true;
@@ -1590,6 +1712,8 @@ sc_screen_resume(struct sc_screen *screen, struct sc_controller *controller,
     screen->im.mp = mp;
     screen->im.gp = gp;
     screen->im.disconnected = false;
+    free(screen->im.serial);
+    screen->im.serial = serial ? strdup(serial) : NULL;
 
     if (window_title && (!screen->window_title || strcmp(screen->window_title, window_title))) {
         free(screen->window_title);
@@ -1612,4 +1736,168 @@ sc_screen_resume(struct sc_screen *screen, struct sc_controller *controller,
     }
 
     sc_screen_update_title(screen);
+}
+
+void
+sc_screen_set_muted(struct sc_screen *screen, bool muted) {
+    screen->muted = muted;
+    sc_screen_update_title(screen);
+}
+
+void
+sc_screen_set_recording(struct sc_screen *screen, bool recording) {
+    screen->recording = recording;
+    sc_screen_update_title(screen);
+}
+
+void
+sc_screen_set_social_profile_name(struct sc_screen *screen, const char *name) {
+    screen->social_profile_name = name;
+    sc_screen_update_title(screen);
+}
+
+void
+sc_screen_cycle_opacity(struct sc_screen *screen) {
+    if (!screen->window) {
+        return;
+    }
+    static const float opacities[] = { 1.00f, 0.85f, 0.70f, 0.50f };
+    screen->opacity_index = (screen->opacity_index + 1) % 4;
+    float op = opacities[screen->opacity_index];
+    SDL_SetWindowOpacity(screen->window, op);
+    LOGI("Window opacity: %.0f%%", (double) (op * 100.0f));
+}
+
+void
+sc_screen_toggle_mini_player(struct sc_screen *screen) {
+    if (!screen->window) {
+        return;
+    }
+    if (!screen->mini_player) {
+        SDL_GetWindowPosition(screen->window, &screen->saved_win_x, &screen->saved_win_y);
+        SDL_GetWindowSize(screen->window, &screen->saved_win_w, &screen->saved_win_h);
+        if (screen->saved_win_w <= 0 || screen->saved_win_h <= 0) {
+            screen->saved_win_w = 400;
+            screen->saved_win_h = 800;
+        }
+        int mini_w = 320;
+        int mini_h = (int) ((float) screen->saved_win_h * mini_w / screen->saved_win_w);
+        if (mini_h < 100) {
+            mini_h = 100;
+        }
+        SDL_SetWindowAlwaysOnTop(screen->window, true);
+        SDL_SetWindowSize(screen->window, mini_w, mini_h);
+        screen->mini_player = true;
+        LOGI("Mini-player mode ENABLED (320x%d, Always-On-Top)", mini_h);
+    } else {
+        SDL_SetWindowAlwaysOnTop(screen->window, false);
+        SDL_SetWindowSize(screen->window, screen->saved_win_w, screen->saved_win_h);
+        SDL_SetWindowPosition(screen->window, screen->saved_win_x, screen->saved_win_y);
+        screen->mini_player = false;
+        LOGI("Mini-player mode DISABLED");
+    }
+}
+
+bool
+sc_screen_capture_screenshot(struct sc_screen *screen) {
+    if (!screen->renderer) {
+        return false;
+    }
+
+    sc_mkdir("captures");
+
+    time_t now = time(NULL);
+    struct tm tm_buf;
+#ifdef _WIN32
+    localtime_s(&tm_buf, &now);
+#else
+    localtime_r(&now, &tm_buf);
+#endif
+
+    char filepath[256];
+    snprintf(filepath, sizeof(filepath),
+             "captures/scrcpy_%04d%02d%02d_%02d%02d%02d.png",
+             tm_buf.tm_year + 1900, tm_buf.tm_mon + 1, tm_buf.tm_mday,
+             tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec);
+
+    SDL_Surface *surface = SDL_RenderReadPixels(screen->renderer, NULL);
+    if (!surface) {
+        LOGE("Could not read pixels for screenshot: %s", SDL_GetError());
+        return false;
+    }
+
+    SDL_Surface *rgb_surface = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGB24);
+    SDL_DestroySurface(surface);
+    if (!rgb_surface) {
+        LOGE("Could not convert surface to RGB24: %s", SDL_GetError());
+        return false;
+    }
+
+    bool success = false;
+    const AVCodec *codec = avcodec_find_encoder(AV_CODEC_ID_PNG);
+    if (codec) {
+        AVCodecContext *ctx = avcodec_alloc_context3(codec);
+        if (ctx) {
+            ctx->width = rgb_surface->w;
+            ctx->height = rgb_surface->h;
+            ctx->pix_fmt = AV_PIX_FMT_RGB24;
+            ctx->time_base = (AVRational){1, 25};
+
+            if (avcodec_open2(ctx, codec, NULL) >= 0) {
+                AVFrame *frame = av_frame_alloc();
+                if (frame) {
+                    frame->format = ctx->pix_fmt;
+                    frame->width = ctx->width;
+                    frame->height = ctx->height;
+
+                    if (av_frame_get_buffer(frame, 0) >= 0) {
+                        const uint8_t *src_pixels = rgb_surface->pixels;
+                        int src_pitch = rgb_surface->pitch;
+                        for (int y = 0; y < rgb_surface->h; ++y) {
+                            memcpy(frame->data[0] + y * frame->linesize[0],
+                                   src_pixels + y * src_pitch,
+                                   rgb_surface->w * 3);
+                        }
+
+                        if (avcodec_send_frame(ctx, frame) >= 0) {
+                            AVPacket *pkt = av_packet_alloc();
+                            if (pkt) {
+                                if (avcodec_receive_packet(ctx, pkt) >= 0) {
+                                    FILE *f = fopen(filepath, "wb");
+                                    if (f) {
+                                        if (fwrite(pkt->data, 1, pkt->size, f) == (size_t) pkt->size) {
+                                            success = true;
+                                            LOGI("Screenshot saved (PNG): %s", filepath);
+                                        }
+                                        fclose(f);
+                                    }
+                                }
+                                av_packet_free(&pkt);
+                            }
+                        }
+                    }
+                    av_frame_free(&frame);
+                }
+            }
+            avcodec_free_context(&ctx);
+        }
+    }
+
+    if (!success) {
+        // Fallback to BMP
+        char bmp_path[256];
+        snprintf(bmp_path, sizeof(bmp_path),
+                 "captures/scrcpy_%04d%02d%02d_%02d%02d%02d.bmp",
+                 tm_buf.tm_year + 1900, tm_buf.tm_mon + 1, tm_buf.tm_mday,
+                 tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec);
+        if (SDL_SaveBMP(rgb_surface, bmp_path)) {
+            success = true;
+            LOGI("Screenshot saved (BMP fallback): %s", bmp_path);
+        } else {
+            LOGE("Failed to save screenshot: %s", SDL_GetError());
+        }
+    }
+
+    SDL_DestroySurface(rgb_surface);
+    return success;
 }

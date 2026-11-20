@@ -5,6 +5,7 @@
 #include <string.h>
 #include <SDL3/SDL.h>
 
+#include "adb/adb.h"
 #include "android/input.h"
 #include "android/keycodes.h"
 #include "events.h"
@@ -14,6 +15,9 @@
 #include "util/log.h"
 #include "util/sdl.h"
 #include "util/tick.h"
+
+static int
+run_touch_worker(void *data);
 
 void
 sc_input_manager_init(struct sc_input_manager *im,
@@ -51,6 +55,112 @@ sc_input_manager_init(struct sc_input_manager *im,
 
     im->disconnected = false;
     im->social_mode = false;
+
+    im->ap = params->ap;
+    im->serial = params->serial ? strdup(params->serial) : NULL;
+
+    sc_social_config_init(&im->social_cfg);
+    const struct sc_social_profile *p =
+        sc_social_config_get_current(&im->social_cfg);
+    if (p) {
+        sc_screen_set_social_profile_name(im->screen, p->name);
+    }
+
+    sc_mutex_init(&im->touch_worker.mutex);
+    sc_cond_init(&im->touch_worker.cond);
+    im->touch_worker.head = 0;
+    im->touch_worker.tail = 0;
+    im->touch_worker.count = 0;
+    im->touch_worker.stopped = false;
+    im->touch_worker.im = im;
+    im->touch_worker.thread_started =
+        sc_thread_create(&im->touch_worker.thread, run_touch_worker,
+                         "scrcpy-touch", &im->touch_worker);
+}
+
+void
+sc_input_manager_destroy(struct sc_input_manager *im) {
+    sc_social_config_destroy(&im->social_cfg);
+
+    if (im->touch_worker.thread_started) {
+        sc_mutex_lock(&im->touch_worker.mutex);
+        im->touch_worker.stopped = true;
+        sc_cond_signal(&im->touch_worker.cond);
+        sc_mutex_unlock(&im->touch_worker.mutex);
+
+        sc_thread_join(&im->touch_worker.thread, NULL);
+        im->touch_worker.thread_started = false;
+        sc_cond_destroy(&im->touch_worker.cond);
+        sc_mutex_destroy(&im->touch_worker.mutex);
+    }
+
+    free(im->serial);
+    im->serial = NULL;
+}
+
+void
+sc_input_manager_interrupt(struct sc_input_manager *im) {
+    if (im->touch_worker.thread_started) {
+        sc_mutex_lock(&im->touch_worker.mutex);
+        im->touch_worker.stopped = true;
+        sc_cond_signal(&im->touch_worker.cond);
+        sc_mutex_unlock(&im->touch_worker.mutex);
+    }
+}
+
+void
+sc_input_manager_join(struct sc_input_manager *im) {
+    if (im->touch_worker.thread_started) {
+        sc_thread_join(&im->touch_worker.thread, NULL);
+        im->touch_worker.thread_started = false;
+    }
+}
+
+void
+sc_input_manager_toggle_social_mode(struct sc_input_manager *im) {
+    im->social_mode = !im->social_mode;
+    const struct sc_social_profile *p =
+        sc_social_config_get_current(&im->social_cfg);
+    sc_screen_set_social_profile_name(im->screen, p ? p->name : "TIKTOK");
+    sc_screen_set_social_mode(im->screen, im->social_mode);
+    LOGI("Mode Navigation & Reseaux Sociaux (F10): %s [Profil: %s]",
+         im->social_mode ? "ACTIVE" : "DESACTIVE", p ? p->name : "TIKTOK");
+}
+
+void
+sc_input_manager_next_social_profile(struct sc_input_manager *im) {
+    const struct sc_social_profile *p =
+        sc_social_config_next_profile(&im->social_cfg);
+    if (p) {
+        sc_screen_set_social_profile_name(im->screen, p->name);
+        LOGI("Profil Social selectionne (F9): [%s]", p->name);
+    }
+}
+
+void
+sc_input_manager_reload_social_config(struct sc_input_manager *im) {
+    if (sc_social_config_reload(&im->social_cfg)) {
+        const struct sc_social_profile *p =
+            sc_social_config_get_current(&im->social_cfg);
+        if (p) {
+            sc_screen_set_social_profile_name(im->screen, p->name);
+        }
+        LOGI("Configuration 'scrcpy_social.ini' rechargee a chaud (Shift+F9)");
+    } else {
+        LOGW("Echec du rechargement de 'scrcpy_social.ini'");
+    }
+}
+
+void
+sc_input_manager_toggle_audio_mute(struct sc_input_manager *im) {
+    if (im->ap) {
+        bool m = !sc_audio_player_is_muted(im->ap);
+        sc_audio_player_set_muted(im->ap, m);
+        sc_screen_set_muted(im->screen, m);
+        LOGI("Audio (F8): %s", m ? "COUPE (MUTED)" : "ACTIVE (UNMUTED)");
+    } else {
+        LOGW("Audio non actif dans cette session");
+    }
 }
 
 static void
@@ -309,17 +419,6 @@ open_hard_keyboard_settings(struct sc_input_manager *im) {
     }
 }
 
-static void
-reset_video(struct sc_input_manager *im) {
-    assert(im->controller);
-
-    struct sc_control_msg msg;
-    msg.type = SC_CONTROL_MSG_TYPE_RESET_VIDEO;
-
-    if (!sc_controller_push_msg(im->controller, &msg)) {
-        LOGW("Could not request reset video");
-    }
-}
 
 static void
 camera_set_torch(struct sc_input_manager *im, bool on) {
@@ -476,54 +575,125 @@ sc_social_send_touch(struct sc_input_manager *im,
     return sc_controller_push_msg(im->controller, &msg);
 }
 
+static int
+run_touch_worker(void *data) {
+    struct sc_touch_worker *worker = data;
+    struct sc_input_manager *im = worker->im;
+
+    sc_mutex_lock(&worker->mutex);
+    while (!worker->stopped) {
+        while (!worker->stopped && worker->count == 0) {
+            sc_cond_wait(&worker->cond, &worker->mutex);
+        }
+        if (worker->stopped) {
+            break;
+        }
+
+        struct sc_gesture_task task = worker->queue[worker->head];
+        worker->head = (worker->head + 1) % SC_GESTURE_QUEUE_SIZE;
+        worker->count--;
+
+        sc_mutex_unlock(&worker->mutex);
+
+        if (!im->controller || !im->screen || !im->screen->frame_size.width || !im->screen->frame_size.height) {
+            sc_mutex_lock(&worker->mutex);
+            continue;
+        }
+
+        switch (task.type) {
+            case SC_GESTURE_TAP: {
+                struct sc_point pt = sc_social_get_point(im, task.rx1, task.ry1);
+                sc_social_send_touch(im, AMOTION_EVENT_ACTION_DOWN, pt, 1.0f);
+                SDL_Delay(25);
+                sc_social_send_touch(im, AMOTION_EVENT_ACTION_UP, pt, 0.0f);
+                break;
+            }
+            case SC_GESTURE_DOUBLE_TAP: {
+                struct sc_point pt1 = sc_social_get_point(im, task.rx1, task.ry1);
+                sc_social_send_touch(im, AMOTION_EVENT_ACTION_DOWN, pt1, 1.0f);
+                SDL_Delay(25);
+                sc_social_send_touch(im, AMOTION_EVENT_ACTION_UP, pt1, 0.0f);
+                SDL_Delay(55);
+                struct sc_point pt2 = sc_social_get_point(im, task.rx1, task.ry1);
+                sc_social_send_touch(im, AMOTION_EVENT_ACTION_DOWN, pt2, 1.0f);
+                SDL_Delay(25);
+                sc_social_send_touch(im, AMOTION_EVENT_ACTION_UP, pt2, 0.0f);
+                break;
+            }
+            case SC_GESTURE_SWIPE: {
+                struct sc_point start_pt = sc_social_get_point(im, task.rx1, task.ry1);
+                struct sc_point end_pt = sc_social_get_point(im, task.rx2, task.ry2);
+
+                sc_social_send_touch(im, AMOTION_EVENT_ACTION_DOWN, start_pt, 1.0f);
+                SDL_Delay(12);
+
+                const int steps = 7;
+                for (int i = 1; i <= steps; ++i) {
+                    float t = (float) i / (float) steps;
+                    int32_t xi = (int32_t) (start_pt.x + t * (end_pt.x - start_pt.x));
+                    int32_t yi = (int32_t) (start_pt.y + t * (end_pt.y - start_pt.y));
+                    struct sc_point pt = { .x = xi, .y = yi };
+                    sc_social_send_touch(im, AMOTION_EVENT_ACTION_MOVE, pt, 1.0f);
+                    SDL_Delay(12);
+                }
+
+                sc_social_send_touch(im, AMOTION_EVENT_ACTION_UP, end_pt, 0.0f);
+                break;
+            }
+        }
+
+        sc_mutex_lock(&worker->mutex);
+    }
+    sc_mutex_unlock(&worker->mutex);
+    return 0;
+}
+
+static void
+sc_touch_worker_push(struct sc_touch_worker *worker, struct sc_gesture_task task) {
+    sc_mutex_lock(&worker->mutex);
+    if (worker->stopped) {
+        sc_mutex_unlock(&worker->mutex);
+        return;
+    }
+    if (worker->count < SC_GESTURE_QUEUE_SIZE) {
+        worker->queue[worker->tail] = task;
+        worker->tail = (worker->tail + 1) % SC_GESTURE_QUEUE_SIZE;
+        worker->count++;
+        sc_cond_signal(&worker->cond);
+    }
+    sc_mutex_unlock(&worker->mutex);
+}
+
 static void
 sc_social_tap(struct sc_input_manager *im, float rx, float ry) {
-    if (!im->controller || !im->screen) {
-        return;
-    }
-    if (!im->screen->frame_size.width || !im->screen->frame_size.height) {
-        return;
-    }
-
-    struct sc_point pt = sc_social_get_point(im, rx, ry);
-    sc_social_send_touch(im, AMOTION_EVENT_ACTION_DOWN, pt, 1.0f);
-    SDL_Delay(25);
-    sc_social_send_touch(im, AMOTION_EVENT_ACTION_UP, pt, 0.0f);
+    struct sc_gesture_task task = {
+        .type = SC_GESTURE_TAP,
+        .rx1 = rx,
+        .ry1 = ry,
+    };
+    sc_touch_worker_push(&im->touch_worker, task);
 }
 
 static void
 sc_social_double_tap(struct sc_input_manager *im, float rx, float ry) {
-    sc_social_tap(im, rx, ry);
-    SDL_Delay(55);
-    sc_social_tap(im, rx, ry);
+    struct sc_gesture_task task = {
+        .type = SC_GESTURE_DOUBLE_TAP,
+        .rx1 = rx,
+        .ry1 = ry,
+    };
+    sc_touch_worker_push(&im->touch_worker, task);
 }
 
 static void
 sc_social_swipe(struct sc_input_manager *im, float rx1, float ry1, float rx2, float ry2) {
-    if (!im->controller || !im->screen) {
-        return;
-    }
-    if (!im->screen->frame_size.width || !im->screen->frame_size.height) {
-        return;
-    }
-
-    struct sc_point start_pt = sc_social_get_point(im, rx1, ry1);
-    struct sc_point end_pt = sc_social_get_point(im, rx2, ry2);
-
-    sc_social_send_touch(im, AMOTION_EVENT_ACTION_DOWN, start_pt, 1.0f);
-    SDL_Delay(12);
-
-    const int steps = 7;
-    for (int i = 1; i <= steps; ++i) {
-        float t = (float) i / (float) steps;
-        int32_t xi = (int32_t) (start_pt.x + t * (end_pt.x - start_pt.x));
-        int32_t yi = (int32_t) (start_pt.y + t * (end_pt.y - start_pt.y));
-        struct sc_point pt = { .x = xi, .y = yi };
-        sc_social_send_touch(im, AMOTION_EVENT_ACTION_MOVE, pt, 1.0f);
-        SDL_Delay(12);
-    }
-
-    sc_social_send_touch(im, AMOTION_EVENT_ACTION_UP, end_pt, 0.0f);
+    struct sc_gesture_task task = {
+        .type = SC_GESTURE_SWIPE,
+        .rx1 = rx1,
+        .ry1 = ry1,
+        .rx2 = rx2,
+        .ry2 = ry2,
+    };
+    sc_touch_worker_push(&im->touch_worker, task);
 }
 
 static const char *const EMOJI_LIST[] = {
@@ -635,35 +805,47 @@ sc_social_process_key(struct sc_input_manager *im, SDL_Keycode key,
         case SDLK_L:
             sc_social_double_tap(im, 0.50f, 0.50f);
             return;
-        case SDLK_F:
-            sc_social_tap(im, 0.92f, 0.53f);
+        case SDLK_F: {
+            const struct sc_social_profile *p = sc_social_config_get_current(&im->social_cfg);
+            sc_social_tap(im, p->coords.like_x, p->coords.like_y);
             return;
-        case SDLK_C:
-            sc_social_tap(im, 0.92f, 0.64f);
+        }
+        case SDLK_C: {
+            const struct sc_social_profile *p = sc_social_config_get_current(&im->social_cfg);
+            sc_social_tap(im, p->coords.comment_x, p->coords.comment_y);
             return;
-        case SDLK_S:
-            sc_social_tap(im, 0.92f, 0.75f);
+        }
+        case SDLK_S: {
+            const struct sc_social_profile *p = sc_social_config_get_current(&im->social_cfg);
+            sc_social_tap(im, p->coords.share_x, p->coords.share_y);
             return;
-        case SDLK_P:
+        }
+        case SDLK_P: {
+            const struct sc_social_profile *p = sc_social_config_get_current(&im->social_cfg);
             if (shift) {
-                sc_social_tap(im, 0.90f, 0.94f);
+                sc_social_tap(im, p->coords.my_profile_x, p->coords.my_profile_y);
             } else {
-                sc_social_tap(im, 0.92f, 0.42f);
+                sc_social_tap(im, p->coords.profile_x, p->coords.profile_y);
             }
             return;
-        case SDLK_M:
+        }
+        case SDLK_M: {
+            const struct sc_social_profile *p = sc_social_config_get_current(&im->social_cfg);
             if (shift) {
                 sc_social_tap(im, 0.70f, 0.94f);
             } else {
-                sc_social_tap(im, 0.91f, 0.07f);
+                sc_social_tap(im, p->coords.dm_x, p->coords.dm_y);
             }
             return;
+        }
         case SDLK_R:
             sc_social_swipe(im, 0.50f, 0.20f, 0.50f, 0.82f);
             return;
-        case SDLK_A:
-            sc_social_tap(im, 0.10f, 0.94f);
+        case SDLK_A: {
+            const struct sc_social_profile *p = sc_social_config_get_current(&im->social_cfg);
+            sc_social_tap(im, p->coords.feed_x, p->coords.feed_y);
             return;
+        }
 
         // D. Global Phone Control & Android Utilities
         case SDLK_N:
@@ -747,15 +929,24 @@ sc_input_manager_process_key(struct sc_input_manager *im,
 
     // Shortcuts that do not involve the MOD key
     switch (sdl_keycode) {
+        case SDLK_F8:
+            if (down && !repeat && !disconnected) {
+                bool alt = mod & SDL_KMOD_ALT;
+                bool super = mod & SDL_KMOD_GUI;
+                if (!ctrl && !alt && !super) {
+                    sc_input_manager_toggle_audio_mute(im);
+                }
+            }
+            return;
         case SDLK_F9:
             if (down && !repeat && !disconnected) {
                 bool alt = mod & SDL_KMOD_ALT;
                 bool super = mod & SDL_KMOD_GUI;
                 if (!ctrl && !alt && !super) {
                     if (shift) {
-                        sc_input_manager_inject_emoji(im, "❤️");
+                        sc_input_manager_reload_social_config(im);
                     } else {
-                        sc_input_manager_inject_emoji(im, NULL);
+                        sc_input_manager_next_social_profile(im);
                     }
                 }
             }
@@ -765,10 +956,7 @@ sc_input_manager_process_key(struct sc_input_manager *im,
                 bool alt = mod & SDL_KMOD_ALT;
                 bool super = mod & SDL_KMOD_GUI;
                 if (!ctrl && !alt && !super) {
-                    im->social_mode = !im->social_mode;
-                    sc_screen_set_social_mode(im->screen, im->social_mode);
-                    LOGI("Mode Navigation & Réseaux Sociaux (F10): %s",
-                         im->social_mode ? "ACTIVÉ" : "DÉSACTIVÉ");
+                    sc_input_manager_toggle_social_mode(im);
                 }
             }
             return;
@@ -887,11 +1075,34 @@ sc_input_manager_process_key(struct sc_input_manager *im,
                     sc_screen_toggle_fullscreen(im->screen);
                 }
                 return;
-            case SDLK_W:
+            case SDLK_Y:
                 if (video && !shift && !repeat && down) {
-                    sc_screen_resize_to_fit(im->screen);
+                    sc_screen_capture_screenshot(im->screen);
                 }
                 return;
+            case SDLK_W:
+                if (!repeat && down) {
+                    if (shift) {
+                        if (video) {
+                            sc_screen_resize_to_fit(im->screen);
+                        }
+                    } else {
+                        sc_adb_switch_to_wifi_async(im->serial);
+                    }
+                }
+                return;
+            case SDLK_O:
+                if (video && shift && !repeat && down) {
+                    sc_screen_cycle_opacity(im->screen);
+                    return;
+                }
+                break;
+            case SDLK_M:
+                if (video && shift && !repeat && down) {
+                    sc_screen_toggle_mini_player(im->screen);
+                    return;
+                }
+                break;
             case SDLK_G:
                 if (video && !shift && !repeat && down) {
                     sc_screen_resize_to_pixel_perfect(im->screen);
@@ -925,8 +1136,8 @@ sc_input_manager_process_key(struct sc_input_manager *im,
                 case SDLK_R:
                     // Only capture if shift is set
                     if (shift) {
-                        if (!repeat && down && !paused) {
-                            reset_video(im);
+                        if (!repeat && down) {
+                            sc_push_event(SC_EVENT_TRAY_TOGGLE_RECORD);
                         }
                         return;
                     }
@@ -1258,6 +1469,19 @@ sc_input_manager_process_mouse_button(struct sc_input_manager *im,
     if (control && !paused) {
         enum sc_action action = down ? SC_ACTION_DOWN : SC_ACTION_UP;
 
+        if (event->button == SDL_BUTTON_X1) {
+            if (im->kp) {
+                press_back_or_turn_screen_on(im, action);
+            }
+            return;
+        }
+        if (event->button == SDL_BUTTON_X2) {
+            if (im->kp) {
+                action_app_switch(im, action);
+            }
+            return;
+        }
+
         struct sc_mouse_binding_set *bindings = !shift_pressed
                                               ? &im->mouse_bindings.pri
                                               : &im->mouse_bindings.sec;
@@ -1399,6 +1623,18 @@ static void
 sc_input_manager_process_mouse_wheel(struct sc_input_manager *im,
                                      const SDL_MouseWheelEvent *event) {
     if (im->camera || !im->kp || im->screen->paused || im->disconnected) {
+        return;
+    }
+
+    SDL_Keymod keymod = SDL_GetModState();
+    if (sc_shortcut_mods_is_shortcut_mod(im->sdl_shortcut_mods, keymod)) {
+        if (event->y > 0) {
+            action_volume_up(im, SC_ACTION_DOWN);
+            action_volume_up(im, SC_ACTION_UP);
+        } else if (event->y < 0) {
+            action_volume_down(im, SC_ACTION_DOWN);
+            action_volume_down(im, SC_ACTION_UP);
+        }
         return;
     }
 
@@ -1594,6 +1830,26 @@ sc_input_manager_handle_event(struct sc_input_manager *im,
             break;
         case SC_EVENT_DEVICE_DISCONNECTED:
             sc_input_manager_on_device_disconnected(im);
+            break;
+        case SC_EVENT_TRAY_WAKE:
+            if (!im->disconnected && im->controller && !im->camera) {
+                sc_input_manager_req_set_display_power(im, true);
+            }
+            break;
+        case SC_EVENT_TRAY_TOGGLE_SOCIAL:
+            if (!im->disconnected) {
+                sc_input_manager_toggle_social_mode(im);
+            }
+            break;
+        case SC_EVENT_TRAY_NEXT_PROFILE:
+            if (!im->disconnected) {
+                sc_input_manager_next_social_profile(im);
+            }
+            break;
+        case SC_EVENT_TRAY_TOGGLE_MUTE:
+            if (!im->disconnected) {
+                sc_input_manager_toggle_audio_mute(im);
+            }
             break;
     }
 }

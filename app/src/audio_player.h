@@ -3,6 +3,7 @@
 
 #include "common.h"
 
+#include <stdatomic.h>
 #include <SDL3/SDL_audio.h>
 
 #include "audio_regulator.h"
@@ -11,6 +12,8 @@
 
 struct sc_audio_player {
     struct sc_frame_sink frame_sink;
+
+    atomic_bool muted;
 
     // The target buffering between the producer and the consumer. This value
     // is directly use for compensation.
@@ -33,5 +36,11 @@ struct sc_audio_player {
 void
 sc_audio_player_init(struct sc_audio_player *ap, sc_tick target_buffering,
                      sc_tick audio_output_buffer);
+
+void
+sc_audio_player_set_muted(struct sc_audio_player *ap, bool muted);
+
+bool
+sc_audio_player_is_muted(struct sc_audio_player *ap);
 
 #endif

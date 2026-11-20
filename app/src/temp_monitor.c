@@ -38,11 +38,15 @@ run_temp_monitor(void *data) {
         sc_mutex_unlock(&tm->mutex);
 
         if (tm->serial) {
-            int32_t temp = sc_adb_get_temperature(&tm->intr, tm->serial);
-            if (temp != INT32_MIN) {
-                LOGI("Device temperature: %.1f°C", temp / 10.0f);
+            struct sc_battery_info info;
+            if (sc_adb_get_battery_info(&tm->intr, tm->serial, &info)) {
+                if (info.temp != INT32_MIN) {
+                    LOGI("Device temperature: %.1f°C | Battery: %" PRId32 "%% (%s)",
+                         info.temp / 10.0f, info.level,
+                         info.charging ? "charging" : "discharging");
+                }
                 if (tm->cb) {
-                    tm->cb(temp, tm->cb_userdata);
+                    tm->cb(&info, tm->cb_userdata);
                 }
             }
         }
@@ -149,7 +153,12 @@ sc_temp_monitor_stop(struct sc_temp_monitor *tm) {
     LOGI("Temperature monitor stopped");
 
     if (tm->cb) {
-        tm->cb(INT32_MIN, tm->cb_userdata);
+        struct sc_battery_info info = {
+            .temp = INT32_MIN,
+            .level = -1,
+            .charging = false,
+        };
+        tm->cb(&info, tm->cb_userdata);
     }
 }
 

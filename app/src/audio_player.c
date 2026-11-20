@@ -29,6 +29,11 @@ sc_audio_player_stream_callback(void *userdata, SDL_AudioStream *stream,
 
         assert(chunk_size <= len);
         len -= chunk_size;
+
+        if (atomic_load_explicit(&ap->muted, memory_order_acquire)) {
+            memset(ap->aout_buffer, 0, chunk_size);
+        }
+
         bool ok =
             SDL_PutAudioStreamData(stream, ap->aout_buffer, chunk_size);
         if (!ok) {
@@ -147,6 +152,7 @@ sc_audio_player_frame_sink_close(struct sc_frame_sink *sink) {
 void
 sc_audio_player_init(struct sc_audio_player *ap, sc_tick target_buffering,
                      sc_tick output_buffer_duration) {
+    atomic_init(&ap->muted, false);
     ap->target_buffering_delay = target_buffering;
     ap->output_buffer_duration = output_buffer_duration;
 
@@ -157,4 +163,14 @@ sc_audio_player_init(struct sc_audio_player *ap, sc_tick target_buffering,
     };
 
     ap->frame_sink.ops = &ops;
+}
+
+void
+sc_audio_player_set_muted(struct sc_audio_player *ap, bool muted) {
+    atomic_store_explicit(&ap->muted, muted, memory_order_release);
+}
+
+bool
+sc_audio_player_is_muted(struct sc_audio_player *ap) {
+    return atomic_load_explicit(&ap->muted, memory_order_acquire);
 }

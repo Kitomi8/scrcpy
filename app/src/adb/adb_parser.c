@@ -294,3 +294,56 @@ sc_adb_parse_temperature(const char *str, int32_t *out_tenth_c) {
 
     return true;
 }
+
+bool
+sc_adb_parse_battery(const char *str, struct sc_battery_info *info) {
+    if (!str || !info) {
+        return false;
+    }
+
+    info->temp = INT32_MIN;
+    info->level = -1;
+    info->charging = false;
+
+    // Check charging flags
+    if (strstr(str, "AC powered: true") ||
+        strstr(str, "USB powered: true") ||
+        strstr(str, "Wireless powered: true")) {
+        info->charging = true;
+    }
+
+    // Check battery status code (2: CHARGING, 5: FULL)
+    const char *status_str = strstr(str, "status:");
+    if (status_str) {
+        status_str += 7;
+        while (*status_str == ' ' || *status_str == '\t') {
+            ++status_str;
+        }
+        long st = strtol(status_str, NULL, 10);
+        if (st == 2 || st == 5) {
+            info->charging = true;
+        }
+    }
+
+    // Battery level
+    const char *level_str = strstr(str, "level:");
+    if (level_str) {
+        level_str += 6;
+        while (*level_str == ' ' || *level_str == '\t') {
+            ++level_str;
+        }
+        char *endptr;
+        long lvl = strtol(level_str, &endptr, 10);
+        if (endptr != level_str && lvl >= 0 && lvl <= 100) {
+            info->level = (int32_t) lvl;
+        }
+    }
+
+    // Temperature
+    int32_t temp = INT32_MIN;
+    if (sc_adb_parse_temperature(str, &temp)) {
+        info->temp = temp;
+    }
+
+    return info->temp != INT32_MIN || info->level != -1;
+}

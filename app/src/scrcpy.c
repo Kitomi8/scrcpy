@@ -49,6 +49,8 @@
 #ifdef HAVE_V4L2
 # include "v4l2_sink.h"
 #endif
+#include "rec_forwarder.h"
+#include "tray.h"
 #include "video_regulator.h"
 
 #define SC_BACKPRESSURE_THRESHOLD 8 // in-flight frames in video regulator
@@ -63,6 +65,10 @@ struct scrcpy {
     struct sc_decoder audio_decoder;
     struct sc_hwdec hwdec;
     struct sc_recorder recorder;
+    struct sc_rec_forwarder rec_forwarder;
+    bool rec_forwarder_initialized;
+    struct sc_tray tray;
+    bool tray_initialized;
     struct sc_video_regulator video_regulator;
 #ifdef HAVE_V4L2
     struct sc_v4l2_sink v4l2_sink;
@@ -148,6 +154,36 @@ event_loop(struct scrcpy *s, bool has_screen) {
             case SC_EVENT_TIME_LIMIT_REACHED:
                 LOGI("Time limit reached");
                 return SCRCPY_EXIT_SUCCESS;
+            case SC_EVENT_TRAY_WAKE:
+            case SC_EVENT_TRAY_TOGGLE_SOCIAL:
+            case SC_EVENT_TRAY_NEXT_PROFILE:
+            case SC_EVENT_TRAY_TOGGLE_MUTE:
+                if (has_screen) {
+                    sc_screen_handle_event(&s->screen, &event);
+                }
+                break;
+            case SC_EVENT_TRAY_TOGGLE_RECORD: {
+                if (!s->rec_forwarder_initialized) {
+                    LOGW("Dynamic recording is not available");
+                    break;
+                }
+                bool recording = false;
+                char filename[256] = {0};
+                if (sc_rec_forwarder_toggle(&s->rec_forwarder, &recording,
+                                            filename, sizeof(filename))) {
+                    if (has_screen) {
+                        sc_screen_set_recording(&s->screen, recording);
+                    }
+                    if (recording) {
+                        LOGI("Dynamic recording started: %s", filename);
+                    } else {
+                        LOGI("Dynamic recording stopped: %s", filename);
+                    }
+                } else {
+                    LOGW("Failed to toggle dynamic recording");
+                }
+                break;
+            }
             case SDL_EVENT_QUIT:
                 LOGD("User requested to quit");
                 return SCRCPY_EXIT_SUCCESS;
@@ -461,6 +497,13 @@ scrcpy(struct scrcpy_options *options) {
         }
     }
 
+    s->tray_initialized = false;
+    if (options->window) {
+        if (sc_tray_init(&s->tray)) {
+            s->tray_initialized = true;
+        }
+    }
+
     if (options->audio_playback) {
         if (!SDL_Init(SDL_INIT_AUDIO)) {
             LOGE("Could not initialize SDL audio: %s", SDL_GetError());
@@ -499,6 +542,7 @@ scrcpy(struct scrcpy_options *options) {
     }
 
 session_start:
+    s->rec_forwarder_initialized = false;
     server_started = false;
     file_pusher_initialized = false;
     recorder_initialized = false;
@@ -719,6 +763,20 @@ session_start:
         }
     }
 
+    if (!options->record_filename && options->video) {
+        if (sc_rec_forwarder_init(&s->rec_forwarder, options->video,
+                                  options->audio,
+                                  options->record_orientation)) {
+            s->rec_forwarder_initialized = true;
+            sc_packet_source_add_sink(&s->video_demuxer.packet_source,
+                                      &s->rec_forwarder.video_sink);
+            if (options->audio) {
+                sc_packet_source_add_sink(&s->audio_demuxer.packet_source,
+                                          &s->rec_forwarder.audio_sink);
+            }
+        }
+    }
+
     struct sc_controller *controller = NULL;
     struct sc_key_processor *kp = NULL;
     struct sc_mouse_processor *mp = NULL;
@@ -896,6 +954,7 @@ aoa_complete:
                 .kp = kp,
                 .mp = mp,
                 .gp = gp,
+                .ap = options->audio_playback ? &s->audio_player : NULL,
                 .mouse_bindings = options->mouse_bindings,
                 .legacy_paste = options->legacy_paste,
                 .clipboard_autosync = options->clipboard_autosync,
@@ -1128,6 +1187,10 @@ aoa_complete:
     }
 
 end:
+    if (s->rec_forwarder_initialized) {
+        sc_rec_forwarder_destroy(&s->rec_forwarder);
+        s->rec_forwarder_initialized = false;
+    }
     if (timeout_started) {
         sc_timeout_stop(&s->timeout);
     }
@@ -1290,11 +1353,20 @@ end:
 
     sc_server_destroy(&s->server);
 
+    if (s->tray_initialized) {
+        sc_tray_destroy(&s->tray);
+        s->tray_initialized = false;
+    }
+
     sc_adb_destroy();
 
     return ret;
 
 wait_reconnect:
+    if (s->rec_forwarder_initialized) {
+        sc_rec_forwarder_destroy(&s->rec_forwarder);
+        s->rec_forwarder_initialized = false;
+    }
     if (timeout_started) {
         sc_timeout_stop(&s->timeout);
     }
@@ -1462,6 +1534,10 @@ wait_reconnect:
         }
 
         if (reconnect_quit) {
+            if (s->tray_initialized) {
+                sc_tray_destroy(&s->tray);
+                s->tray_initialized = false;
+            }
             sc_screen_interrupt(&s->screen);
             sc_screen_hide_window(&s->screen);
             sc_screen_join(&s->screen);

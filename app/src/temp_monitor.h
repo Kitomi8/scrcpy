@@ -7,9 +7,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "adb/adb_parser.h"
 #include "util/intr.h"
 #include "util/thread.h"
 #include "util/tick.h"
+
+typedef void (*sc_temp_monitor_cb)(const struct sc_battery_info *info,
+                                   void *userdata);
 
 struct sc_temp_monitor {
     sc_thread thread;
@@ -22,13 +26,11 @@ struct sc_temp_monitor {
     bool interrupted;
     char *serial;
 
-    void (*cb)(int32_t temp_tenth_c, void *userdata);
+    sc_temp_monitor_cb cb;
     void *cb_userdata;
 
     struct sc_intr intr;
 };
-
-typedef void (*sc_temp_monitor_cb)(int32_t temp_tenth_c, void *userdata);
 
 bool
 sc_temp_monitor_init(struct sc_temp_monitor *tm, const char *serial);

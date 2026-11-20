@@ -7,6 +7,7 @@
 #include <inttypes.h>
 
 #include "adb/adb_device.h"
+#include "adb/adb_parser.h"
 #include "util/intr.h"
 
 #define SC_ADB_NO_STDOUT (1 << 0)
@@ -140,5 +141,19 @@ sc_adb_get_device_sdk_version(struct sc_intr *intr, const char *serial);
  */
 int32_t
 sc_adb_get_temperature(struct sc_intr *intr, const char *serial);
+
+/**
+ * Retrieve battery information (temperature, percentage, charging state).
+ * Return true if successfully parsed, false on error.
+ */
+bool
+sc_adb_get_battery_info(struct sc_intr *intr, const char *serial,
+                        struct sc_battery_info *info);
+
+/**
+ * Switch device from USB to Wi-Fi asynchronously.
+ */
+bool
+sc_adb_switch_to_wifi_async(const char *serial);
 
 #endif

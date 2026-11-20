@@ -33,13 +33,18 @@ _<kbd>[Super]</kbd> is typically the <kbd>Windows</kbd> or <kbd>Cmd</kbd> key._
  | Unpause display                             | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>z</kbd>
  | Reset video capture/encoding                | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>r</kbd>
  | Resize window to 1:1 (pixel-perfect)        | <kbd>MOD</kbd>+<kbd>g</kbd>
- | Resize window to remove black borders       | <kbd>MOD</kbd>+<kbd>w</kbd> \| _Double-left-click¹_
+ | Resize window to remove black borders       | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>w</kbd> \| _Double-left-click¹_
+ | Hot switch connection from USB to Wi-Fi     | <kbd>MOD</kbd>+<kbd>w</kbd>
+ | Take screenshot (saved as PNG in captures/) | <kbd>MOD</kbd>+<kbd>y</kbd>
+ | Toggle on-the-fly MP4 recording (captures/) | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>r</kbd>
+ | Cycle window opacity (100%, 85%, 70%, 50%)  | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>o</kbd>
+ | Toggle Mini-Player mode (~320px, on top)    | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>m</kbd>
  | Click on `HOME`                             | <kbd>MOD</kbd>+<kbd>h</kbd> \| _Middle-click_
- | Click on `BACK`                             | <kbd>MOD</kbd>+<kbd>b</kbd> \| <kbd>MOD</kbd>+<kbd>Backspace</kbd> \| <kbd>Esc</kbd> \| _Right-click²_
- | Click on `APP_SWITCH`                       | <kbd>MOD</kbd>+<kbd>s</kbd> \| _4th-click³_
+ | Click on `BACK`                             | <kbd>MOD</kbd>+<kbd>b</kbd> \| <kbd>MOD</kbd>+<kbd>Backspace</kbd> \| <kbd>Esc</kbd> \| _Right-click²_ \| _Mouse X1³_
+ | Click on `APP_SWITCH`                       | <kbd>MOD</kbd>+<kbd>s</kbd> \| _Mouse X2³_ \| _4th-click³_
+ | Click on `VOLUME_UP`                        | <kbd>MOD</kbd>+<kbd>↑</kbd> _(up)_ \| <kbd>MOD</kbd>+<kbd>Wheel Up</kbd>
+ | Click on `VOLUME_DOWN`                      | <kbd>MOD</kbd>+<kbd>↓</kbd> _(down)_ \| <kbd>MOD</kbd>+<kbd>Wheel Down</kbd>
  | Click on `MENU` (unlock screen)⁴            | <kbd>MOD</kbd>+<kbd>m</kbd>
- | Click on `VOLUME_UP`                        | <kbd>MOD</kbd>+<kbd>↑</kbd> _(up)_
- | Click on `VOLUME_DOWN`                      | <kbd>MOD</kbd>+<kbd>↓</kbd> _(down)_
  | Click on `POWER`                            | <kbd>MOD</kbd>+<kbd>p</kbd>
  | Power on                                    | _Right-click²_
  | Turn device screen off (keep mirroring)     | <kbd>MOD</kbd>+<kbd>o</kbd>
@@ -55,8 +60,9 @@ _<kbd>[Super]</kbd> is typically the <kbd>Windows</kbd> or <kbd>Cmd</kbd> key._
  | Open keyboard settings (HID keyboard only)  | <kbd>MOD</kbd>+<kbd>k</kbd>
  | Enable/disable FPS counter (on stdout)      | <kbd>MOD</kbd>+<kbd>i</kbd>
  | Enable/disable temperature monitor          | <kbd>MOD</kbd>+<kbd>t</kbd>
- | Insert Emoji (cycle trending emojis)        | <kbd>F9</kbd> or <kbd>MOD</kbd>+<kbd>e</kbd>
- | Insert Heart emoji (❤️)                     | <kbd>Shift</kbd>+<kbd>F9</kbd> or <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>e</kbd>
+ | Mute / unmute audio (silence output)        | <kbd>F8</kbd>
+ | Switch social profile (TikTok, IG, FB, YT)  | <kbd>F9</kbd>
+ | Hot-reload scrcpy_social.ini config file    | <kbd>Shift</kbd>+<kbd>F9</kbd>
  | Toggle Social & Navigation Mode             | <kbd>F10</kbd>
  | Wake up device & turn screen on             | <kbd>F12</kbd>
  | Pinch-to-zoom/rotate                        | <kbd>Ctrl</kbd>+_click-and-move_
@@ -121,4 +127,22 @@ When active, `[SOCIAL: ON]` is indicated in the window title bar, and the follow
 | <kbd>PageUp</kbd> | Volume UP | Android VOLUME_UP key |
 | <kbd>PageDown</kbd> | Volume DOWN | Android VOLUME_DOWN key |
 | <kbd>v</kbd> | Native screenshot | Android SYSRQ key |
+
+### Switchable Profiles (<kbd>F9</kbd> & <kbd>Shift</kbd>+<kbd>F9</kbd>)
+
+You can customize interaction coordinates for different apps via the `scrcpy_social.ini` configuration file (created automatically if missing).
+
+- Press <kbd>F9</kbd> to cycle between profiles: `[TIKTOK]`, `[IG_LITE]`, `[FB_LITE]`, `[YOUTUBE]`. The current profile is reflected in the title bar (e.g. `[SOCIAL: TIKTOK]`).
+- Press <kbd>Shift</kbd>+<kbd>F9</kbd> to hot-reload `scrcpy_social.ini` without restarting scrcpy.
+- All touch gestures and swipes run on a dedicated worker thread with zero frame drops or delays in rendering.
+
+## System Tray
+
+An icon is automatically added to your desktop system tray providing convenient one-click access:
+- **Wake device screen (<kbd>F12</kbd>)**
+- **Toggle Social mode (<kbd>F10</kbd>)**
+- **Switch social profile (<kbd>F9</kbd>)**
+- **Mute / Unmute audio (<kbd>F8</kbd>)**
+- **Record video (<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>)**
+- **Quit**
 

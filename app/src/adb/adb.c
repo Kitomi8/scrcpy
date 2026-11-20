@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <SDL3/SDL.h>
 
 #include "adb/adb_device.h"
 #include "adb/adb_parser.h"
@@ -815,16 +816,18 @@ sc_adb_get_device_sdk_version(struct sc_intr *intr, const char *serial) {
     return value;
 }
 
-int32_t
-sc_adb_get_temperature(struct sc_intr *intr, const char *serial) {
+bool
+sc_adb_get_battery_info(struct sc_intr *intr, const char *serial,
+                        struct sc_battery_info *info) {
     assert(serial);
+    assert(info);
     const char *const argv[] =
         SC_ADB_COMMAND("-s", serial, "shell", "dumpsys", "battery");
 
     sc_pipe pout;
     sc_pid pid = sc_adb_execute_p(argv, SC_ADB_SILENT, &pout);
     if (pid == SC_PROCESS_NONE) {
-        return INT32_MIN;
+        return false;
     }
 
     char buf[1024];
@@ -833,15 +836,100 @@ sc_adb_get_temperature(struct sc_intr *intr, const char *serial) {
 
     bool ok = process_check_success_intr(intr, pid, "dumpsys battery", SC_ADB_SILENT);
     if (!ok || r <= 0) {
-        return INT32_MIN;
+        return false;
     }
 
     buf[r] = '\0';
+    return sc_adb_parse_battery(buf, info);
+}
 
-    int32_t temp = INT32_MIN;
-    if (sc_adb_parse_temperature(buf, &temp)) {
-        return temp;
+int32_t
+sc_adb_get_temperature(struct sc_intr *intr, const char *serial) {
+    struct sc_battery_info info;
+    if (sc_adb_get_battery_info(intr, serial, &info) && info.temp != INT32_MIN) {
+        return info.temp;
     }
 
     return INT32_MIN;
+}
+
+struct sc_wifi_switch_data {
+    char *serial;
+    struct sc_intr intr;
+    sc_thread thread;
+};
+
+static int
+run_wifi_switch(void *userdata) {
+    struct sc_wifi_switch_data *data = userdata;
+
+    LOGI("Bascule USB -> Wi-Fi en cours pour l'appareil %s...",
+         data->serial ? data->serial : "(defaut)");
+
+    char *ip = sc_adb_get_device_ip(&data->intr, data->serial, 0);
+    if (!ip) {
+        LOGE("Impossible de recuperer l'adresse IP Wi-Fi de l'appareil");
+        goto end;
+    }
+
+    LOGI("Adresse IP Wi-Fi detectee : %s", ip);
+
+    bool ok = sc_adb_tcpip(&data->intr, data->serial, 5555, 0);
+    if (!ok) {
+        LOGE("Echec de la commande 'adb tcpip 5555'");
+        free(ip);
+        goto end;
+    }
+
+    SDL_Delay(500);
+
+    char ip_port[64];
+    snprintf(ip_port, sizeof(ip_port), "%s:5555", ip);
+
+    ok = sc_adb_connect(&data->intr, ip_port, 0);
+    if (ok) {
+        LOGI("Connecte avec succes en Wi-Fi a %s ! Vous pouvez debrancher le cable USB ; la reconnexion automatique s'occupera du reste.", ip_port);
+    } else {
+        LOGW("Tentative de connexion a %s terminee (verifiez si l'appareil est sur le meme reseau)", ip_port);
+    }
+    free(ip);
+
+end:
+    sc_intr_destroy(&data->intr);
+    free(data->serial);
+    free(data);
+    return 0;
+}
+
+bool
+sc_adb_switch_to_wifi_async(const char *serial) {
+    struct sc_wifi_switch_data *data = malloc(sizeof(*data));
+    if (!data) {
+        LOG_OOM();
+        return false;
+    }
+
+    data->serial = serial ? strdup(serial) : NULL;
+    if (serial && !data->serial) {
+        LOG_OOM();
+        free(data);
+        return false;
+    }
+
+    if (!sc_intr_init(&data->intr)) {
+        free(data->serial);
+        free(data);
+        return false;
+    }
+
+    bool ok = sc_thread_create(&data->thread, run_wifi_switch, "scrcpy-wifi", data);
+    if (!ok) {
+        LOGE("Could not start Wi-Fi switcher thread");
+        sc_intr_destroy(&data->intr);
+        free(data->serial);
+        free(data);
+        return false;
+    }
+
+    return true;
 }
