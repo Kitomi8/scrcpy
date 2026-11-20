@@ -86,7 +86,7 @@ Press <kbd>F10</kbd> to toggle between normal typing mode and dedicated social m
 
 - **Reels & TikTok**: <kbd>↓</kbd> / <kbd>j</kbd> (Next), <kbd>↑</kbd> / <kbd>k</kbd> (Prev), <kbd>Space</kbd> (Pause/Play), <kbd>l</kbd> (Double-tap Like).
 - **Stories**: <kbd>→</kbd> / <kbd>d</kbd> (Next story), <kbd>←</kbd> / <kbd>q</kbd> (Prev story), <kbd>Shift</kbd>+<kbd>→</kbd> / <kbd>Shift</kbd>+<kbd>←</kbd> (Next/Prev account).
-- **Interactions**: <kbd>f</kbd> (Like icon), <kbd>c</kbd> (Comments), <kbd>s</kbd> (Share), <kbd>p</kbd> (Creator profile), <kbd>Shift</kbd>+<kbd>p</kbd> (My profile), <kbd>m</kbd> (DMs), <kbd>Shift</kbd>+<kbd>m</kbd> (TikTok Inbox), <kbd>r</kbd> (Pull-to-refresh), <kbd>a</kbd> (Home feed).
+- **Interactions**: <kbd>e</kbd> / <kbd>Shift</kbd>+<kbd>e</kbd> (Insert emoji / Heart reaction), <kbd>f</kbd> (Like icon), <kbd>c</kbd> (Comments), <kbd>s</kbd> (Share), <kbd>p</kbd> (Creator profile), <kbd>Shift</kbd>+<kbd>p</kbd> (My profile), <kbd>m</kbd> (DMs), <kbd>Shift</kbd>+<kbd>m</kbd> (TikTok Inbox), <kbd>r</kbd> (Pull-to-refresh), <kbd>a</kbd> (Home feed).
 - **System controls**: <kbd>n</kbd> / <kbd>Shift</kbd>+<kbd>n</kbd> (Notifications), <kbd>u</kbd> (Quick Settings), <kbd>Backspace</kbd> / <kbd>Esc</kbd> (Back & dismiss), <kbd>h</kbd> (Home), <kbd>Tab</kbd> (App Switcher), <kbd>PageUp</kbd> / <kbd>PageDown</kbd> (Volume), <kbd>v</kbd> (Screenshot).
 
 ---
@@ -276,6 +276,8 @@ The default modifier key (<kbd>MOD</kbd>) on Windows is **(Left) <kbd>Alt</kbd>*
 | Shortcut | Action |
 |---|---|
 | <kbd>Esc</kbd> | **Android BACK** |
+| <kbd>F9</kbd> or <kbd>MOD</kbd>+<kbd>e</kbd> | **Insert Emoji** (cycles: 😂, ❤️, 🔥, 👍, 😍, 😭, ✨, 👏, 🙏, 🎉...) |
+| <kbd>Shift</kbd>+<kbd>F9</kbd> or <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>e</kbd> | **Insert Heart Emoji (❤️)** |
 | <kbd>F10</kbd> | **Toggle Social & Navigation Mode** (TikTok, Reels, Stories) |
 | <kbd>F12</kbd> | **Wake up device & turn screen on** |
 | <kbd>MOD</kbd>+<kbd>t</kbd> | **Toggle Phone Temperature in Title Bar** |

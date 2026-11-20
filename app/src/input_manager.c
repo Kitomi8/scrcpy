@@ -13,6 +13,7 @@
 #include "shortcut_mod.h"
 #include "util/log.h"
 #include "util/sdl.h"
+#include "util/tick.h"
 
 void
 sc_input_manager_init(struct sc_input_manager *im,
@@ -525,6 +526,54 @@ sc_social_swipe(struct sc_input_manager *im, float rx1, float ry1, float rx2, fl
     sc_social_send_touch(im, AMOTION_EVENT_ACTION_UP, end_pt, 0.0f);
 }
 
+static const char *const EMOJI_LIST[] = {
+    "😂", "❤️", "🔥", "👍", "😍", "😭", "✨", "👏", "🙏", "🎉",
+    "🤣", "💀", "🥰", "💯", "😊", "😎", "🤔", "🥺", "👀", "🥳",
+};
+
+static void
+sc_input_manager_inject_emoji(struct sc_input_manager *im, const char *custom_emoji) {
+    if (!im->controller || im->screen->paused || im->disconnected || im->camera) {
+        return;
+    }
+
+    static size_t emoji_idx = 0;
+    static sc_tick last_tick = 0;
+
+    const char *emoji;
+    if (custom_emoji) {
+        emoji = custom_emoji;
+    } else {
+        sc_tick now = sc_tick_now();
+        if (now - last_tick < SC_TICK_FROM_MS(2500)) {
+            emoji_idx = (emoji_idx + 1) % ARRAY_LEN(EMOJI_LIST);
+        } else {
+            emoji_idx = 0;
+        }
+        last_tick = now;
+        emoji = EMOJI_LIST[emoji_idx];
+    }
+
+    char *text_dup = strdup(emoji);
+    if (!text_dup) {
+        return;
+    }
+
+    struct sc_control_msg msg;
+    msg.type = SC_CONTROL_MSG_TYPE_SET_CLIPBOARD;
+    msg.set_clipboard.sequence = SC_SEQUENCE_INVALID;
+    msg.set_clipboard.text = text_dup;
+    msg.set_clipboard.paste = true;
+
+    if (!sc_controller_push_msg(im->controller, &msg)) {
+        free(text_dup);
+        LOGW("Could not request 'inject emoji'");
+        return;
+    }
+
+    LOGI("Emoji injecté: %s (réappuyez pour faire défiler les émojis populaires)", emoji);
+}
+
 static void
 sc_social_process_key(struct sc_input_manager *im, SDL_Keycode key,
                       uint16_t mod, bool down, bool repeat) {
@@ -576,6 +625,13 @@ sc_social_process_key(struct sc_input_manager *im, SDL_Keycode key,
             return;
 
         // C. Social Interactions (Like, Comment, Share, Profile, Messages)
+        case SDLK_E:
+            if (shift) {
+                sc_input_manager_inject_emoji(im, "❤️");
+            } else {
+                sc_input_manager_inject_emoji(im, NULL);
+            }
+            return;
         case SDLK_L:
             sc_social_double_tap(im, 0.50f, 0.50f);
             return;
@@ -691,6 +747,19 @@ sc_input_manager_process_key(struct sc_input_manager *im,
 
     // Shortcuts that do not involve the MOD key
     switch (sdl_keycode) {
+        case SDLK_F9:
+            if (down && !repeat && !disconnected) {
+                bool alt = mod & SDL_KMOD_ALT;
+                bool super = mod & SDL_KMOD_GUI;
+                if (!ctrl && !alt && !super) {
+                    if (shift) {
+                        sc_input_manager_inject_emoji(im, "❤️");
+                    } else {
+                        sc_input_manager_inject_emoji(im, NULL);
+                    }
+                }
+            }
+            return;
         case SDLK_F10:
             if (down && !repeat && !disconnected) {
                 bool alt = mod & SDL_KMOD_ALT;
@@ -762,6 +831,15 @@ sc_input_manager_process_key(struct sc_input_manager *im,
     if (is_shortcut) {
         enum sc_action action = down ? SC_ACTION_DOWN : SC_ACTION_UP;
         switch (sdl_keycode) {
+            case SDLK_E:
+                if (!repeat && down) {
+                    if (shift) {
+                        sc_input_manager_inject_emoji(im, "❤️");
+                    } else {
+                        sc_input_manager_inject_emoji(im, NULL);
+                    }
+                }
+                return;
             case SDLK_Z:
                 if (video && down && !repeat) {
                     sc_screen_set_paused(im->screen, !shift);

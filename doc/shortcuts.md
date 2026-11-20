@@ -55,6 +55,8 @@ _<kbd>[Super]</kbd> is typically the <kbd>Windows</kbd> or <kbd>Cmd</kbd> key._
  | Open keyboard settings (HID keyboard only)  | <kbd>MOD</kbd>+<kbd>k</kbd>
  | Enable/disable FPS counter (on stdout)      | <kbd>MOD</kbd>+<kbd>i</kbd>
  | Enable/disable temperature monitor          | <kbd>MOD</kbd>+<kbd>t</kbd>
+ | Insert Emoji (cycle trending emojis)        | <kbd>F9</kbd> or <kbd>MOD</kbd>+<kbd>e</kbd>
+ | Insert Heart emoji (❤️)                     | <kbd>Shift</kbd>+<kbd>F9</kbd> or <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>e</kbd>
  | Toggle Social & Navigation Mode             | <kbd>F10</kbd>
  | Wake up device & turn screen on             | <kbd>F12</kbd>
  | Pinch-to-zoom/rotate                        | <kbd>Ctrl</kbd>+_click-and-move_
@@ -99,6 +101,8 @@ When active, `[SOCIAL: ON]` is indicated in the window title bar, and the follow
 | <kbd>Shift</kbd>+<kbd>→</kbd> / <kbd>Shift</kbd>+<kbd>d</kbd> | Next story account / category | Horizontal swipe right-to-left |
 | <kbd>Shift</kbd>+<kbd>←</kbd> / <kbd>Shift</kbd>+<kbd>q</kbd> | Previous story account / category | Horizontal swipe left-to-right |
 | <kbd>l</kbd> | Universal Like (TikTok / Reels / Posts) | Double-tap center (`rx=0.50`, `ry=0.50`) |
+| <kbd>e</kbd> | Insert Emoji (cycle trending emojis) | Inject emoji (😂, ❤️, 🔥, 👍, 😍, 😭, ✨, 👏, 🙏, 🎉...) |
+| <kbd>Shift</kbd>+<kbd>e</kbd> | Quick Heart reaction | Inject ❤️ |
 | <kbd>f</kbd> | Lateral Like button | Tap icon column (`rx=0.92`, `ry=0.53`) |
 | <kbd>c</kbd> | Open Comments | Tap comments icon (`rx=0.92`, `ry=0.64`) |
 | <kbd>s</kbd> | Share post | Tap share icon (`rx=0.92`, `ry=0.75`) |

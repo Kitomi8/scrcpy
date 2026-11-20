@@ -314,16 +314,36 @@ sc_key_processor_process_text(struct sc_key_processor *kp,
         }
     }
 
-    struct sc_control_msg msg;
-    msg.type = SC_CONTROL_MSG_TYPE_INJECT_TEXT;
-    msg.inject_text.text = strdup(event->text);
-    if (!msg.inject_text.text) {
+    bool has_multibyte = false;
+    for (const char *p = event->text; *p; ++p) {
+        if ((unsigned char) *p >= 0x80) {
+            has_multibyte = true;
+            break;
+        }
+    }
+
+    char *text = strdup(event->text);
+    if (!text) {
         LOGW("Could not strdup input text");
         return;
     }
+
+    struct sc_control_msg msg;
+    if (has_multibyte) {
+        // Characters outside ASCII/Latin (such as emojis) cannot be converted to
+        // KeyEvents by Android's KeyCharacterMap. Inject them via clipboard paste.
+        msg.type = SC_CONTROL_MSG_TYPE_SET_CLIPBOARD;
+        msg.set_clipboard.sequence = SC_SEQUENCE_INVALID;
+        msg.set_clipboard.text = text;
+        msg.set_clipboard.paste = true;
+    } else {
+        msg.type = SC_CONTROL_MSG_TYPE_INJECT_TEXT;
+        msg.inject_text.text = text;
+    }
+
     if (!sc_controller_push_msg(kb->controller, &msg)) {
-        free(msg.inject_text.text);
-        LOGW("Could not request 'inject text'");
+        free(text);
+        LOGW("Could not request 'inject text / emoji'");
     }
 }
 
